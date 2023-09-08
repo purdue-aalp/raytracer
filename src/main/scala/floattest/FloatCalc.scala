@@ -8,6 +8,7 @@ class FloatCalc extends Module {
     val in1 = Input(SInt(32.W))
     val in2 = Input(SInt(32.W))
     val out = Output(UInt(32.W))
+    val out_valid = Output(Bool())
   })
 
   // convert input from Int to Recorded Float
@@ -24,13 +25,26 @@ class FloatCalc extends Module {
   in2_recfn.io.detectTininess := consts.tininess_afterRounding 
 
   // functional unit does the calculation
-  val fu = Module(new AddRecFN(8, 24))
-  fu.io.subOp := false.B 
+
+  // //ADD
+  // val fu = Module(new AddRecFN(8, 24))
+  // fu.io.subOp := false.B 
+  // fu.io.a := in1_recfn.io.out 
+  // fu.io.b := in2_recfn.io.out 
+  // fu.io.roundingMode := consts.round_min
+  // fu.io.detectTininess := consts.tininess_afterRounding 
+
+  // DIV
+  val fu = Module(new DivSqrtRecFN_small(8, 24, 0))
+  fu.io.inValid := fu.io.inReady 
+  fu.io.sqrtOp := false.B 
   fu.io.a := in1_recfn.io.out 
   fu.io.b := in2_recfn.io.out 
   fu.io.roundingMode := consts.round_min
   fu.io.detectTininess := consts.tininess_afterRounding 
 
+
   // convert output to IEEE 754-compliant Float from Recorded Float 
   io.out := fNFromRecFN(8, 24, fu.io.out)
+  io.out_valid := fu.io.outValid_div | fu.io.outValid_sqrt
 }
