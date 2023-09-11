@@ -7,7 +7,7 @@ import scalalib._
 // support BSP
 import mill.bsp._
 
-object raytracer extends SbtModule { m =>
+object raytracer extends  SbtModule { m =>
   override def millSourcePath = os.pwd
   override def scalaVersion = "2.13.8"
   override def scalacOptions = Seq(
@@ -23,7 +23,12 @@ object raytracer extends SbtModule { m =>
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:5.0.0",
   )
-  object test extends Tests with ScalaTest {
+
+  def sources = T.sources{
+    super.sources() ++ Seq(PathRef(millSourcePath / "external"/"hardfloat"/"src"))
+  }
+
+  object test extends Tests with ScalaTest{
     override def ivyDeps = m.ivyDeps() ++ Agg(
       ivy"edu.berkeley.cs::chiseltest:5.0.0"
     )
