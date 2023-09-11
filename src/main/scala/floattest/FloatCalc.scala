@@ -5,22 +5,21 @@ import hardfloat._
 
 class FloatCalc extends Module {
   val io = IO(new Bundle {
-    val in1 = Input(SInt(32.W))
-    val in2 = Input(SInt(32.W))
     val out = Output(UInt(32.W))
     val out_valid = Output(Bool())
   })
+  val dual_in = IO(Input(new Dual()))
 
   // convert input from Int to Recorded Float
   val in1_recfn = Module(new INToRecFN(32, 8, 24))
   in1_recfn.io.signedIn := true.B
-  in1_recfn.io.in := io.in1.asUInt
+  in1_recfn.io.in := dual_in.in1.asUInt
   in1_recfn.io.roundingMode := consts.round_min 
   in1_recfn.io.detectTininess := consts.tininess_afterRounding 
 
   val in2_recfn = Module(new INToRecFN(32, 8, 24))
   in2_recfn.io.signedIn := true.B
-  in2_recfn.io.in := io.in2.asUInt
+  in2_recfn.io.in := dual_in.in2.asUInt
   in2_recfn.io.roundingMode := consts.round_min 
   in2_recfn.io.detectTininess := consts.tininess_afterRounding 
 

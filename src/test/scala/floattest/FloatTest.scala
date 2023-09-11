@@ -9,8 +9,8 @@ import java.nio.ByteBuffer
 class FloatTestSpec extends AnyFreeSpec with ChiselScalatestTester {
   "blah" in {
     test(new FloatCalc) {dut => 
-      dut.io.in1.poke(179)
-      dut.io.in2.poke(9)
+      dut.dual_in.in1.poke(179)
+      dut.dual_in.in2.poke(9)
 
       for (i <- 0 to 100){
         val x = dut.io.out.peek()
