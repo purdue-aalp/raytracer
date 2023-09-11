@@ -57,11 +57,13 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester{
 
       for(_ <- 0 to 20){
         val sum = update_random_inputs(dut)
+        for(_ <- 0 until 3){
+          dut.clock.step(1)
+          val hw_sum = bitsToFloat( dut.sum.peek().litValue.intValue )
+          println(s"sw: ${sum}, hw: ${hw_sum}, diff_ratio: ${(abs(sum-hw_sum)/sum)}")
+        }
         val hw_sum = bitsToFloat( dut.sum.peek().litValue.intValue )
-
-        println(s"sw: ${sum}, hw: ${hw_sum}")
         assert((abs(sum-hw_sum)/sum)<0.01)
-        dut.clock.step()
       }
     }
   }
