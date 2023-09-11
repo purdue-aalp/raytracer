@@ -3,8 +3,8 @@ package baseline_datapath
 import chisel3._ 
 import chiseltest._ 
 import org.scalatest.freespec.AnyFreeSpec 
-
 import scala.util.Random 
+import scala.math._
 
 import java.nio.ByteBuffer 
 
@@ -38,8 +38,10 @@ object bitsToFloat{
 class Datapath_test extends AnyFreeSpec with ChiselScalatestTester{
   val r = new Random()
 
-  "woobalooba" in {
-    test(new Datapath){dut =>
+  "calculated sum should be close if not equal" in {
+    test(new Datapath).withAnnotations(
+      Seq(VerilatorBackendAnnotation, WriteVcdAnnotation)
+    ){dut =>
 
       def update_random_inputs(dut: Datapath): Float = {
         val input_ports = Seq(dut.ray.dir.x, dut.ray.dir.y, dut.ray.dir.z, dut.ray.origin.x, dut.ray.origin.y, dut.ray.origin.z, dut.ray.inv.x, dut.ray.inv.y, dut.ray.inv.z, dut.ray.extent, dut.aabb.x_min, dut.aabb.x_max, dut.aabb.y_min, dut.aabb.y_max, dut.aabb.z_min, dut.aabb.z_max)
@@ -58,6 +60,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester{
         val hw_sum = bitsToFloat( dut.sum.peek().litValue.intValue )
 
         println(s"sw: ${sum}, hw: ${hw_sum}")
+        assert((abs(sum-hw_sum)/sum)<0.01)
         dut.clock.step()
       }
     }
