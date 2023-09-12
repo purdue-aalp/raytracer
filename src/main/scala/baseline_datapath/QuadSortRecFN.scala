@@ -17,6 +17,10 @@ class QuadSortRecFN extends Module {
   val io = IO(new Bundle{
     val in = Input(Vec(4, Bits(33.W)))
     val out = Output(Vec(4, Bits(33.W)))
+
+    //aliases to out(0) and out(3)
+    val largest = Output(Bits(33.W))
+    val smallest = Output(Bits(33.W))
   })
   val _input_width = 4
 
@@ -49,6 +53,8 @@ class QuadSortRecFN extends Module {
 
   echelons(0).stage_elements := io.in 
   io.out := echelons(stages).stage_elements
+  io.largest := io.out(0)
+  io.smallest := io.out(_input_width-1)
 
   cas_sequence
     .zipWithIndex  // (pair_0, 0), (pair_1, 1), ...
