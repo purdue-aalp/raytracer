@@ -103,8 +103,8 @@ class Datapath extends Module {
       aabb_3.x_max, aabb_3.y_max, aabb_3.z_max      
     )
     val _src2 = Seq(
-      ray_4.inv.x, ray_4.inv.y, ray_4.inv.z,
-      ray_4.inv.x, ray_4.inv.y, ray_4.inv.z
+      ray_3.inv.x, ray_3.inv.y, ray_3.inv.z,
+      ray_3.inv.x, ray_3.inv.y, ray_3.inv.z
     )
     (_dest zip _src1 zip _src2) foreach {case((_1, _2), _3) =>
       val fu = Module(new MulRecFN(8+1, 24))
@@ -123,7 +123,35 @@ class Datapath extends Module {
   val t_min = Wire(new Float3(recorded_float = true))
   val t_max = Wire(new Float3(recorded_float = true))
   
-  val ray_dir_x_is_neg = Wire(Bool())
+  def flip_intervals_if_dir_is_neg(
+    c_out: Bits, d_out: Bits,
+    a: Bits, b: Bits, c: Bits, d: Bits, 
+    dont_flip_if_equal: Boolean // scala type boolean, not Chisel type!
+  ) = {
+    val fu = Module(new RecFNCompareSelect(option=dont_flip_if_equal, passthrough_type=Bits(33.W)))
+    c_out := fu.io.c_out 
+    d_out := fu.io.d_out 
+    fu.io.a := a 
+    fu.io.b := b 
+    fu.io.c := c 
+    fu.io.d := d
+  }
+  
+  flip_intervals_if_dir_is_neg(
+    t_min.x, t_max.x,
+    ray_4.dir.x, _zero_RecFN, tp_min_4.x, tp_max_4.x, 
+    true
+  )
+  flip_intervals_if_dir_is_neg(
+    t_min.y, t_max.y, 
+    ray_4.dir.y, _zero_RecFN, tp_min_4.y, tp_max_4.y, 
+    true
+  )
+  flip_intervals_if_dir_is_neg(
+    t_min.z, t_max.z, 
+    ray_4.dir.z, _zero_RecFN, tp_min_4.z, tp_max_4.z, 
+    true
+  )
 
 
   {

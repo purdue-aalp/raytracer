@@ -3,16 +3,21 @@ package baseline_datapath
 import chisel3._ 
 import hardfloat._
 
+
+/**
+  * Given two input Recorded-format Floats `a` and `b`, output either `c` or
+  * `d` depending on the result of comparison:
+  * 
+  *     c_out = (a > b || (a==b && option)) ? c : d 
+  *     d_out = "the other of c and d"
+  * 
+  * This is a combinatorial circuit. Parameter "option" controls the behavior
+  * when a===b.  
+  */
 class RecFNCompareSelect (
   val option: Boolean,
   val passthrough_type: Bits
 ) extends Module {
-  /**
-    * Given two input Recorded-format Floats `a` and `b`, output either `c` or
-    * `d` depending on the result of comparison:
-    * c_out = (a > b | (a==b && option)) ? c : d  
-    * d_out = "the other of c and d"
-    */
   val io = IO(new Bundle{
     // compare these two inputs
     val a = Input(Bits(33.W))
