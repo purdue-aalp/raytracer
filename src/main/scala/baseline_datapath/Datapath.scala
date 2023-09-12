@@ -2,11 +2,12 @@ package baseline_datapath
 
 import chisel3._
 import hardfloat._
+import chisel3.experimental.VecLiterals._ // for VecLit
 
 class Datapath extends Module {
   val ray = IO(Input(new Ray(recorded_float = false)))
   val aabb = IO(Input(new AABB(recorded_float = false)))
-  val sum = IO(Output(Bits(32.W)))
+  val isIntersect = IO(Output(Bool()))
 
   // SOME CONSTANTS
   val _rounding_rule = consts.round_near_even
@@ -120,8 +121,8 @@ class Datapath extends Module {
   //
   // STAGE 5: SORTING
   //
-  val t_min = Wire(new Float3(recorded_float = true))
-  val t_max = Wire(new Float3(recorded_float = true))
+  val tmin_3d = Wire(new Float3(recorded_float = true))
+  val tmax_3d = Wire(new Float3(recorded_float = true))
   
   def flip_intervals_if_dir_is_neg(
     c_out: Bits, d_out: Bits,
@@ -138,21 +139,42 @@ class Datapath extends Module {
   }
   
   flip_intervals_if_dir_is_neg(
-    t_min.x, t_max.x,
+    tmin_3d.x, tmax_3d.x,
     ray_4.dir.x, _zero_RecFN, tp_min_4.x, tp_max_4.x, 
     true
   )
   flip_intervals_if_dir_is_neg(
-    t_min.y, t_max.y, 
+    tmin_3d.y, tmax_3d.y, 
     ray_4.dir.y, _zero_RecFN, tp_min_4.y, tp_max_4.y, 
     true
   )
   flip_intervals_if_dir_is_neg(
-    t_min.z, t_max.z, 
+    tmin_3d.z, tmax_3d.z, 
     ray_4.dir.z, _zero_RecFN, tp_min_4.z, tp_max_4.z, 
     true
   )
 
+  // find the largest among all three dimensions of tmin_3d and 0.0f
+  // find the smallest among all three dimensions of tmax_3d and 0.0f
+  val tmin = Wire(Bits(33.W))
+  val tmax = Wire(Bits(33.W))
+
+  val quad_sort_for_tmin = Module(new QuadSortRecFN())
+  quad_sort_for_tmin.io.in := Vec.Lit(tmin_3d.x, tmin_3d.y, tmin_3d.z, _zero_RecFN)
+  tmin := quad_sort_for_tmin.io.largest
+
+  val quad_sort_for_tmax = Module(new QuadSortRecFN())
+  quad_sort_for_tmax.io.in := Vec.Lit(tmax_3d.x, tmax_3d.y, tmax_3d.z, _zero_RecFN)
+  tmax := quad_sort_for_tmin.io.smallest
+
+  // if there's overlap between [tmin, inf) and (-inf, tmax], we say ray-box
+  // intersection happens
+  val comp_tmin_tmax = Module(new CompareRecFN(8, 24))
+  comp_tmin_tmax.io.a := tmin 
+  comp_tmin_tmax.io.b := tmax 
+  comp_tmin_tmax.io.signaling := true.B 
+
+  isIntersect := comp_tmin_tmax.io.lt || comp_tmin_tmax.io.eq
 
   {
   // //
@@ -201,5 +223,4 @@ class Datapath extends Module {
   // sum := fNFromRecFN(8, 24, recFNSum)
   }
 
-  sum := 0.U(32.W)
 }
