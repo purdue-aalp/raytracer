@@ -7,6 +7,11 @@ import chisel3.experimental.VecLiterals._ // for VecLit
 class Datapath extends Module {
   val ray = IO(Input(new Ray(recorded_float = false)))
   val aabb = IO(Input(new AABB(recorded_float = false)))
+
+  // tmin_out is only meaningful if isIntersect===true.B
+  // Its value means the intersection happens at this many units of length from
+  // the ray origin. 
+  val tmin_out = IO(Output(Bits(32.W)))
   val isIntersect = IO(Output(Bool()))
 
   // SOME CONSTANTS
@@ -122,6 +127,8 @@ class Datapath extends Module {
   //
   val tmin_3d = Wire(new Float3(recorded_float = true))
   val tmax_3d = Wire(new Float3(recorded_float = true))
+  val isIntersect_5 = Reg(Bool())
+  val tmin_out_rec_5 = Reg(Bits(33.W))
   
   def flip_intervals_if_dir_is_neg(
     c_out: Bits, d_out: Bits,
@@ -179,7 +186,18 @@ class Datapath extends Module {
   comp_tmin_tmax.io.b := tmax 
   comp_tmin_tmax.io.signaling := true.B 
 
-  isIntersect := comp_tmin_tmax.io.lt || comp_tmin_tmax.io.eq
+  isIntersect_5 := comp_tmin_tmax.io.lt || comp_tmin_tmax.io.eq
+  tmin_out_rec_5 := tmin
+
+  //
+  // STAGE 6: 33->32 CONVERSION AND OUTPUT DRIVING
+  //
+
+  val isIntersect_6 = RegNext(isIntersect_5)
+  val tmin_out_6 = RegNext(fNFromRecFN(8, 24, tmin_out_rec_5))
+
+  isIntersect := isIntersect_6
+  tmin_out := tmin_out_6
 
   {
   // //
