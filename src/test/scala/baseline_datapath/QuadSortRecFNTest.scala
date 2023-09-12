@@ -6,6 +6,25 @@ import org.scalatest.freespec.AnyFreeSpec
 import scala.util.Random 
 import hardfloat._
 
+// to support Vec literals
+import chisel3.experimental.VecLiterals._ 
+
+object pokeVector{
+  /**
+    * A convenience method to poke a Vec[T] input port with a sequence of T objects.
+    *
+    * It makes use of the experimental VecLiteral feature. 
+    * @param port
+    * @param seq
+    */
+  def apply[T <: Data] (port: Vec[T], seq: Seq[T]) = {
+    port.poke(chiselTypeOf(port).Lit(
+      // the ":_*" operator spreads the elements of a sequence into separate arguments
+      seq.zipWithIndex.map{case(x, i)=>i->x}:_*
+    ))
+  }
+}
+
 class ValExec_QuadSortRecFN extends Module {
   val in = IO(Input(Vec(4, Bits(32.W))))
   val actual_out = IO(Output(Vec(4, Bits(32.W))))
@@ -38,15 +57,20 @@ class ValExec_QuadSortRecFN extends Module {
 
 class QuadSortRecFNTest extends AnyFreeSpec with ChiselScalatestTester {
   val r = new Random() 
-  val N_TEST = 1000
+  val N_TEST = 200000
   "correctly sort four floats" in {
-    test(new ValExec_QuadSortRecFN()){dut => 
+    test(new ValExec_QuadSortRecFN()).withAnnotations(
+     Seq(VerilatorBackendAnnotation) 
+    ){dut => 
       for(_ <- 0 until N_TEST){
         val input_vector = Seq.tabulate(4)(_=>r.nextFloat())
         val expected_out = input_vector.sortWith(_ > _)
-        dut.in.poke(VecInit(input_vector.map(floatToBits(_).U)))
-        dut.expected_out.poke(VecInit(expected_out.map(floatToBits(_).U)))
-        println(s"input_vector is ${input_vector}, expectation is ${expected_out}")
+
+        pokeVector(dut.in, input_vector.map(floatToBits(_).U))
+        pokeVector(dut.expected_out, expected_out.map(floatToBits(_).U))
+        val actual_out = dut.actual_out.peek().map{x=>bitsToFloat(x.litValue.intValue)}
+
+        //println(s"expectation is ${expected_out}, actual is ${actual_out}")
         dut.pass.expect(true)
       }  
     }

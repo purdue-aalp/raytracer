@@ -32,7 +32,8 @@ class QuadSortRecFN extends Module {
     //    circuit so this does not matter
     // 2. For a cas-sequence of length N, declare N-1 echelons of intermediate
     //    value wires, each echelone as wide as the input vector and the output
-    //    vector
+    //    vector. We also create echelons for the input and output wires, so we
+    //    have a total of N+1 echelons
     // 3. The transformation between echelon k and (k+1) is indicated by the
     //    k-th element of the cas-sequence. E.g cas_sequence(0) = (0,2) means
     //      (echelon_1(0), echelon_1(2)) = CAS(echelon_0(0), echelon_0(2)) 
