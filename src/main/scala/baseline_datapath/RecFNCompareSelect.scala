@@ -3,19 +3,28 @@ package baseline_datapath
 import chisel3._ 
 import hardfloat._
 
-class RecFNCompareSelect extends Module {
+class RecFNCompareSelect (
+  val option: Boolean,
+  val passthrough_type: Bits
+) extends Module {
   /**
     * Given two input Recorded-format Floats `a` and `b`, output either `c` or
     * `d` depending on the result of comparison:
-    * output = (a > b | (a==b && option)) ? c : d  
+    * c_out = (a > b | (a==b && option)) ? c : d  
+    * d_out = "the other of c and d"
     */
   val io = IO(new Bundle{
+    // compare these two inputs
     val a = Input(Bits(33.W))
     val b = Input(Bits(33.W))
-    val c = Input(Bits(33.W))
-    val d = Input(Bits(33.W))
-    val option = Input(Bool())
-    val out = Output(Bits(33.W))
+
+    // pass-through with/without swapping these two inputs
+    val c = Input(passthrough_type)
+    val d = Input(passthrough_type)
+
+    // outputs
+    val c_out = Output(passthrough_type)
+    val d_out = Output(passthrough_type)
   })
 
   val fu = Module(new CompareRecFN(8, 24))
@@ -23,12 +32,15 @@ class RecFNCompareSelect extends Module {
   fu.io.b := this.io.b 
   fu.io.signaling := true.B 
 
-  when(io.option && fu.io.eq){
-    this.io.out := this.io.c
-  } .elsewhen(fu.io.gt){
-    this.io.out := this.io.c
+  when(fu.io.gt){
+    this.io.c_out := this.io.c
+    this.io.d_out := this.io.d
+  } .elsewhen(option.B && fu.io.eq){
+    this.io.c_out := this.io.c
+    this.io.d_out := this.io.d
   } .otherwise {
-    this.io.out := this.io.d
+    this.io.c_out := this.io.d
+    this.io.d_out := this.io.c
   }
 
 }
