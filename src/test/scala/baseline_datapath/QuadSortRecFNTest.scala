@@ -57,18 +57,18 @@ class ValExec_QuadSortRecFN extends Module {
 
 class QuadSortRecFNTest extends AnyFreeSpec with ChiselScalatestTester {
   val r = new Random() 
-  val N_TEST = 200000
+  val N_TEST = 100000
   "correctly sort four floats" in {
     test(new ValExec_QuadSortRecFN()).withAnnotations(
      Seq(VerilatorBackendAnnotation) 
     ){dut => 
       for(_ <- 0 until N_TEST){
-        val input_vector = Seq.tabulate(4)(_=>r.nextFloat())
+        val input_vector = Seq.tabulate(4)(_=>1e8f*(r.nextFloat()-0.5f))
         val expected_out = input_vector.sortWith(_ > _)
 
-        pokeVector(dut.in, input_vector.map(floatToBits(_).U))
-        pokeVector(dut.expected_out, expected_out.map(floatToBits(_).U))
-        val actual_out = dut.actual_out.peek().map{x=>bitsToFloat(x.litValue.intValue)}
+        pokeVector(dut.in, input_vector.map(floatToBits(_)))
+        pokeVector(dut.expected_out, expected_out.map(floatToBits(_)))
+        val actual_out = dut.actual_out.peek().map{x=>bitsToFloat(x)}
 
         //println(s"expectation is ${expected_out}, actual is ${actual_out}")
         dut.pass.expect(true)

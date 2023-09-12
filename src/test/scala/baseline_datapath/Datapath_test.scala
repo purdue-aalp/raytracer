@@ -18,18 +18,25 @@ object floatToBits{
     * @param x A Float value
     * @return The integer cast of x.
     */
-  def apply(x: Float): Int = {
-    val bb: ByteBuffer = ByteBuffer.allocate(4)
-    bb.putFloat(x)
-    val y = bb.rewind().getInt()
-    y
+  def apply(x: Float)(implicit width: Int = 32): UInt = {
+    val bb: ByteBuffer = ByteBuffer.allocate(8)
+    bb.putInt(0) 
+    bb.putFloat(x) 
+    
+    // bb now looks like [00][00][00][00][x3][x2][x1][x0]
+    // The reason we allocate 8 bytes and pad the first four with zeros is to
+    // prevent negative x values from triggering a "UInt cannot be negative"
+    // error from Chisel.
+    // y will get truncated anyway
+    val y = bb.rewind().getLong()
+    y.U(width.W)
   }
 }
 
 object bitsToFloat{
-  def apply(x: Int): Float = {
+  def apply(x: UInt): Float = {
     val bb: ByteBuffer = ByteBuffer.allocate(4)
-    bb.putInt(x)
+    bb.putInt(x.litValue.intValue)
     val y = bb.rewind().getFloat()
     y
   }
@@ -59,10 +66,10 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester{
         val sum = update_random_inputs(dut)
         for(_ <- 0 until 3){
           dut.clock.step(1)
-          val hw_sum = bitsToFloat( dut.isIntersect.peek().litValue.intValue )
+          val hw_sum = bitsToFloat( dut.isIntersect.peek() )
           println(s"sw: ${sum}, hw: ${hw_sum}, diff_ratio: ${(abs(sum-hw_sum)/sum)}")
         }
-        val hw_sum = bitsToFloat( dut.isIntersect.peek().litValue.intValue )
+        val hw_sum = bitsToFloat( dut.isIntersect.peek())
         assert((abs(sum-hw_sum)/sum)<0.01)
       }
     }

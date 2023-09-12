@@ -48,16 +48,16 @@ class ValExec_RecFNCompareSelect(
 
 class RecFNCompareSelectTest extends AnyFreeSpec with ChiselScalatestTester {
   val r = new Random() 
-  val N_TEST = 10000
+  val N_TEST = 100000
   "select the greater when option is false" in {
     test(new ValExec_RecFNCompareSelect(false)).withAnnotations(
       Seq(VerilatorBackendAnnotation)
     ){dut=>
         for(_ <- 0 to N_TEST){
-          val a = r.nextFloat()
-          val b = r.nextFloat()
-          val c = r.nextFloat()
-          val d = r.nextFloat() 
+          val a = 1e8f*(r.nextFloat()-0.5f)
+          val b = 1e8f*(r.nextFloat()-0.5f)
+          val c = 1e8f*(r.nextFloat()-0.5f)
+          val d = 1e8f*(r.nextFloat()-0.5f) 
           dut.io.a.poke(floatToBits(a))
           dut.io.b.poke(floatToBits(b))
           dut.io.c.poke(floatToBits(c))
@@ -77,7 +77,7 @@ class RecFNCompareSelectTest extends AnyFreeSpec with ChiselScalatestTester {
 
           val pass = dut.io.pass.peek()
           
-          // println(s"a,b,c,d,expected,actual = $a, $b, $c, $d, ($expected_c_out, $expected_d_out), (${bitsToFloat(dut.io.actual.c_out.peek().litValue.intValue)}, ${bitsToFloat(dut.io.actual.d_out.peek().litValue.intValue)})")
+          // println(s"a,b,c,d,expected,actual = $a, $b, $c, $d, ($expected_c_out, $expected_d_out), (${bitsToFloat(dut.io.actual.c_out.peek())}, ${bitsToFloat(dut.io.actual.d_out.peek())})")
           assert(pass.litToBoolean)
         }
     }
@@ -87,10 +87,10 @@ class RecFNCompareSelectTest extends AnyFreeSpec with ChiselScalatestTester {
     test(new ValExec_RecFNCompareSelect(false)).withAnnotations(
       Seq(VerilatorBackendAnnotation)){dut=>
         for(_ <- 0 to N_TEST){
-          val a = r.nextFloat()
+          val a = 1e8f*(r.nextFloat()-0.5f)
           val b = a
-          val c = r.nextFloat()
-          val d = r.nextFloat() 
+          val c = 1e8f*(r.nextFloat()-0.5f)
+          val d = 1e8f*(r.nextFloat()-0.5f) 
           dut.io.a.poke(floatToBits(a))
           dut.io.b.poke(floatToBits(b))
           dut.io.c.poke(floatToBits(c))
@@ -110,7 +110,7 @@ class RecFNCompareSelectTest extends AnyFreeSpec with ChiselScalatestTester {
 
           val pass = dut.io.pass.peek()
           
-          // println(s"a,b,c,d,expected,actual = $a, $b, $c, $d, ($expected_c_out, $expected_d_out), (${bitsToFloat(dut.io.actual.c_out.peek().litValue.intValue)}, ${bitsToFloat(dut.io.actual.d_out.peek().litValue.intValue)})")
+          // println(s"a,b,c,d,expected,actual = $a, $b, $c, $d, ($expected_c_out, $expected_d_out), (${bitsToFloat(dut.io.actual.c_out.peek())}, ${bitsToFloat(dut.io.actual.d_out.peek())})")
           assert(pass.litToBoolean)
         }
     }
@@ -120,10 +120,10 @@ class RecFNCompareSelectTest extends AnyFreeSpec with ChiselScalatestTester {
     test(new ValExec_RecFNCompareSelect(true)).withAnnotations(
       Seq(VerilatorBackendAnnotation)){dut=>
         for(_ <- 0 to N_TEST){
-          val a = r.nextFloat()
+          val a = 1e8f*(r.nextFloat()-0.5f)
           val b = a
-          val c = r.nextFloat()
-          val d = r.nextFloat() 
+          val c = 1e8f*(r.nextFloat()-0.5f)
+          val d = 1e8f*(r.nextFloat()-0.5f) 
           dut.io.a.poke(floatToBits(a))
           dut.io.b.poke(floatToBits(b))
           dut.io.c.poke(floatToBits(c))
@@ -143,7 +143,7 @@ class RecFNCompareSelectTest extends AnyFreeSpec with ChiselScalatestTester {
 
           val pass = dut.io.pass.peek()
           
-          // println(s"a,b,c,d,expected,actual = $a, $b, $c, $d, ($expected_c_out, $expected_d_out), (${bitsToFloat(dut.io.actual.c_out.peek().litValue.intValue)}, ${bitsToFloat(dut.io.actual.d_out.peek().litValue.intValue)})")
+          // println(s"a,b,c,d,expected,actual = $a, $b, $c, $d, ($expected_c_out, $expected_d_out), (${bitsToFloat(dut.io.actual.c_out.peek())}, ${bitsToFloat(dut.io.actual.d_out.peek())})")
           assert(pass.litToBoolean)
         }
     }
