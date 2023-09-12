@@ -14,12 +14,11 @@ class Datapath extends Module {
   val _tininess_rule = consts.tininess_beforeRounding
   val _zero_RecFN = {
     val convert_zero_int_to_zero_rec_float = Module(new INToRecFN(32, 8, 24))
-    convert_zero_int_to_zero_rec_float.io.signedIn := true.B 
-    convert_zero_int_to_zero_rec_float.io.in := 0.S(32.W)
+    convert_zero_int_to_zero_rec_float.io.signedIn := false.B 
+    convert_zero_int_to_zero_rec_float.io.in := 0.U(32.W)
     convert_zero_int_to_zero_rec_float.io.roundingMode := _rounding_rule
     convert_zero_int_to_zero_rec_float.io.detectTininess := _tininess_rule 
     val out_val = convert_zero_int_to_zero_rec_float.io.out 
-    // TODO: handle exception flags!
     out_val
   }
 
@@ -160,11 +159,17 @@ class Datapath extends Module {
   val tmax = Wire(Bits(33.W))
 
   val quad_sort_for_tmin = Module(new QuadSortRecFN())
-  quad_sort_for_tmin.io.in := Vec.Lit(tmin_3d.x, tmin_3d.y, tmin_3d.z, _zero_RecFN)
+  quad_sort_for_tmin.io.in(0) := tmin_3d.x
+  quad_sort_for_tmin.io.in(1) := tmin_3d.y
+  quad_sort_for_tmin.io.in(2) := tmin_3d.z
+  quad_sort_for_tmin.io.in(3) := _zero_RecFN
   tmin := quad_sort_for_tmin.io.largest
 
   val quad_sort_for_tmax = Module(new QuadSortRecFN())
-  quad_sort_for_tmax.io.in := Vec.Lit(tmax_3d.x, tmax_3d.y, tmax_3d.z, _zero_RecFN)
+  quad_sort_for_tmax.io.in(0) := tmax_3d.x
+  quad_sort_for_tmax.io.in(1) := tmax_3d.y
+  quad_sort_for_tmax.io.in(2) := tmax_3d.z
+  quad_sort_for_tmax.io.in(3) := _zero_RecFN
   tmax := quad_sort_for_tmin.io.smallest
 
   // if there's overlap between [tmin, inf) and (-inf, tmax], we say ray-box
