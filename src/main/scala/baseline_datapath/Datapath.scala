@@ -176,7 +176,7 @@ class Datapath extends Module {
   quad_sort_for_tmax.io.in(0) := tmax_3d.x
   quad_sort_for_tmax.io.in(1) := tmax_3d.y
   quad_sort_for_tmax.io.in(2) := tmax_3d.z
-  quad_sort_for_tmax.io.in(3) := _zero_RecFN
+  quad_sort_for_tmax.io.in(3) := ray_4.extent
   tmax := quad_sort_for_tmin.io.smallest
 
   // if there's overlap between [tmin, inf) and (-inf, tmax], we say ray-box
