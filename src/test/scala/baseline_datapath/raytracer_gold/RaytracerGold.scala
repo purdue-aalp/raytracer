@@ -1,6 +1,9 @@
 package baseline_datapath.raytracer_gold
 
 import scala.math._
+import baseline_datapath.floatToBits
+import chiseltest.testableUInt
+import scala.language.implicitConversions
 
 class float_3 (
   val x: Float,
@@ -15,28 +18,63 @@ object float_3{
   }
 }
 
-class Ray (
+class SW_Ray (
   val origin: float_3,
   val dir: float_3
 ){
-  val extent: Float = Ray.RAY_EXTENT.toFloat
+  val extent: Float = SW_Ray.RAY_EXTENT.toFloat
   val inv: float_3 = {
     val _x = 1.0f / dir.x
     val _y = 1.0f / dir.y 
     val _z = 1.0f / dir.z
-    float_3(_x, _y, _z)
+    val _inv = float_3(_x, _y, _z)
+    _inv
   }
 }
 
-object Ray {
+object SW_Ray {
   val SCENE_BOUNDS = 100000
   val RAY_EXTENT = 4 * SCENE_BOUNDS
   def apply(_ori: float_3, _dir: float_3)={
-    new Ray(_ori, _dir)
+    new SW_Ray(_ori, _dir)
   }
 }
 
-class Box(
+object RaytracerTestHelper{
+  implicit class TestableHWRay(dut_ray: baseline_datapath.Ray){
+    def poke(sw_ray: SW_Ray):Unit = {
+      assert(!dut_ray.isRecordedFloat())
+      dut_ray.origin.x.poke(floatToBits(sw_ray.origin.x))
+      dut_ray.origin.y.poke(floatToBits(sw_ray.origin.y))
+      dut_ray.origin.z.poke(floatToBits(sw_ray.origin.z))
+
+      dut_ray.dir.x.poke(floatToBits(sw_ray.dir.x))
+      dut_ray.dir.y.poke(floatToBits(sw_ray.dir.y))
+      dut_ray.dir.z.poke(floatToBits(sw_ray.dir.z))
+
+      dut_ray.inv.x.poke(floatToBits(sw_ray.inv.x))
+      dut_ray.inv.y.poke(floatToBits(sw_ray.inv.y))
+      dut_ray.inv.z.poke(floatToBits(sw_ray.inv.z))
+
+      dut_ray.extent.poke(floatToBits(sw_ray.extent))
+    }
+  }
+
+  implicit class TestableHWAABB(dut_box: baseline_datapath.AABB){
+    def poke(sw_box: SW_Box):Unit = {
+      assert(!dut_box.isRecordedFloat())
+      dut_box.x_min.poke(floatToBits(sw_box.x_min))
+      dut_box.y_min.poke(floatToBits(sw_box.y_min))
+      dut_box.z_min.poke(floatToBits(sw_box.z_min))
+
+      dut_box.x_max.poke(floatToBits(sw_box.x_max))
+      dut_box.y_max.poke(floatToBits(sw_box.y_max))
+      dut_box.z_max.poke(floatToBits(sw_box.z_max))
+    }
+  }
+}
+
+class SW_Box(
   val x_min: Float,
   val x_max: Float,
   val y_min: Float,
@@ -45,13 +83,13 @@ class Box(
   val z_max: Float
 )
 
-object Box{
+object SW_Box{
   def apply(
     _xmin: Float, _xmax: Float, 
     _ymin: Float, _ymax: Float,
     _zmin: Float, _zmax: Float
   ) = {
-    new Box(_xmin, _xmax, _ymin, _ymax, _zmin, _zmax)
+    new SW_Box(_xmin, _xmax, _ymin, _ymax, _zmin, _zmax)
   }
 }
 
@@ -64,9 +102,9 @@ object RaytracerGold {
     * @return None if no intersection, else Some[Float] containing the tmin
     * value 
     */
-  def testIntersection(ray: Ray, box: Box): Option[Float] = {
+  def testIntersection(ray: SW_Ray, box: SW_Box): Option[Float] = {
     /* Step 1: translate box relative to ray origin */
-    val translated_box = new Box(
+    val translated_box = new SW_Box(
       x_min = box.x_min - ray.origin.x,
       y_min = box.y_min - ray.origin.y, 
       z_min = box.z_min - ray.origin.z, 

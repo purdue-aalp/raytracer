@@ -5,14 +5,17 @@ import hardfloat._
 import chisel3.experimental.VecLiterals._ // for VecLit
 
 class Datapath extends Module {
-  val ray = IO(Input(new Ray(recorded_float = false)))
-  val aabb = IO(Input(new AABB(recorded_float = false)))
+  val io = IO(new Bundle{
+    val ray = Input(new Ray(recorded_float = false))
+    val aabb = Input(new AABB(recorded_float = false))
 
-  // tmin_out is only meaningful if isIntersect===true.B
-  // Its value means the intersection happens at this many units of length from
-  // the ray origin. 
-  val tmin_out = IO(Output(Bits(32.W)))
-  val isIntersect = IO(Output(Bool()))
+    // tmin_out is only meaningful if isIntersect===true.B
+    // Its value means the intersection happens at this many units of length from
+    // the ray origin. 
+    val tmin_out = Output(Bits(32.W))
+    val isIntersect = Output(Bool())
+  })
+
 
   // SOME CONSTANTS
   val _rounding_rule = consts.round_near_even
@@ -26,12 +29,21 @@ class Datapath extends Module {
     val out_val = convert_zero_int_to_zero_rec_float.io.out 
     out_val
   }
+  val _neg_1_0_RecFN = {
+    val convert_zero_int_to_zero_rec_float = Module(new INToRecFN(32, 8, 24))
+    convert_zero_int_to_zero_rec_float.io.signedIn := true.B 
+    convert_zero_int_to_zero_rec_float.io.in := 0xFFFFFFFFL.U(32.W)
+    convert_zero_int_to_zero_rec_float.io.roundingMode := _rounding_rule
+    convert_zero_int_to_zero_rec_float.io.detectTininess := _tininess_rule 
+    val out_val = convert_zero_int_to_zero_rec_float.io.out 
+    out_val
+  }
 
   //
   // STAGE 1: REGISTER INPUTS
   //
-  val ray_1 = RegNext(ray)
-  val aabb_1 = RegNext(aabb)
+  val ray_1 = RegNext(io.ray)
+  val aabb_1 = RegNext(io.aabb)
 
   //
   // STAGE 2: CONVERT FLOAT FORMAT: 32->33
@@ -46,6 +58,8 @@ class Datapath extends Module {
   //
   val ray_3 = RegNext(ray_2)
   val aabb_3 = Reg(new AABB(recorded_float = true))
+
+  val adder_exceptions = Seq.fill(6)(Wire(UInt(5.W)))
 
   // the following implements the C-code:
     /*
@@ -69,14 +83,15 @@ class Datapath extends Module {
       ray_2.origin.x, ray_2.origin.y, ray_2.origin.z,
       ray_2.origin.x, ray_2.origin.y, ray_2.origin.z
     )
-    (_dest zip _src1 zip _src2) foreach { case ((_1, _2), _3) => 
-      val fu = Module(new AddRecFN(8+1, 24))
+    (_dest zip _src1 zip _src2 zip adder_exceptions) foreach { case (((_1, _2), _3), _4) => 
+      val fu = Module(new AddRecFN(8, 24))
       fu.io.subOp := true.B 
       fu.io.a := _2 
       fu.io.b := _3
       fu.io.roundingMode := _rounding_rule
       fu.io.detectTininess := _tininess_rule 
       _1 := fu.io.out
+      _4 := fu.io.exceptionFlags
       // TODO: handle exception flags!
     }
   }
@@ -112,7 +127,7 @@ class Datapath extends Module {
       ray_3.inv.x, ray_3.inv.y, ray_3.inv.z
     )
     (_dest zip _src1 zip _src2) foreach {case((_1, _2), _3) =>
-      val fu = Module(new MulRecFN(8+1, 24))
+      val fu = Module(new MulRecFN(8, 24))
       fu.io.a := _2 
       fu.io.b := _3 
       fu.io.roundingMode := _rounding_rule
@@ -177,7 +192,7 @@ class Datapath extends Module {
   quad_sort_for_tmax.io.in(1) := tmax_3d.y
   quad_sort_for_tmax.io.in(2) := tmax_3d.z
   quad_sort_for_tmax.io.in(3) := ray_4.extent
-  tmax := quad_sort_for_tmin.io.smallest
+  tmax := quad_sort_for_tmax.io.smallest
 
   // if there's overlap between [tmin, inf) and (-inf, tmax], we say ray-box
   // intersection happens
@@ -196,8 +211,8 @@ class Datapath extends Module {
   val isIntersect_6 = RegNext(isIntersect_5)
   val tmin_out_6 = RegNext(fNFromRecFN(8, 24, tmin_out_rec_5))
 
-  isIntersect := isIntersect_6
-  tmin_out := tmin_out_6
+  io.isIntersect := isIntersect_6
+  io.tmin_out := Mux(isIntersect_6, tmin_out_6, _neg_1_0_RecFN)
 
   {
   // //

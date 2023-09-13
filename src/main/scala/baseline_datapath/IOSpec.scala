@@ -58,6 +58,19 @@ class AABB (recorded_float: Boolean = false) extends Bundle {
 
 // Conversion circuits between 32-bit IEEE float and 33-bit recorded float
 
+object Float3ConvertRecFNtoFN{
+  def apply(in: Float3): Float3 = {
+    if(!in.isRecordedFloat()){
+      throw new Exception("input must be in IEEE-754 format before it can be converted to recorded format")
+    }
+    val out = Wire(new Float3(recorded_float = false))
+    out.x := fNFromRecFN(8, 24, in.x)
+    out.y := fNFromRecFN(8, 24, in.y)
+    out.z := fNFromRecFN(8, 24, in.z)
+    out
+  }
+}
+
 object RayConvertFNtoRecFN{
   def apply(in: Ray): Ray = {
     if(in.isRecordedFloat()){
@@ -127,7 +140,7 @@ object AABBConvertRecFNtoFN{
       throw new Exception("AABB must be in recorded format before it can be converted to IEEE-754 format")
     }
 
-    val out = Wire(new AABB(recorded_float = true))
+    val out = Wire(new AABB(recorded_float = false))
     out.x_min := fNFromRecFN(8, 24, in.x_min)
     out.y_min := fNFromRecFN(8, 24, in.y_min)
     out.z_min := fNFromRecFN(8, 24, in.z_min)

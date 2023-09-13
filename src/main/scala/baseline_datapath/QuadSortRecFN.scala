@@ -67,14 +67,14 @@ class QuadSortRecFN extends Module {
         echelons(input_stage_idx+1).stage_elements(cas_0) := cas_unit.io.x_out
         echelons(input_stage_idx+1).stage_elements(cas_1) := cas_unit.io.y_out
 
-        printf(cf"stage ${input_stage_idx}: CAS ${cas_0} and ${cas_1}")
+        // printf(cf"stage ${input_stage_idx}: CAS ${cas_0} and ${cas_1}\n")
         
         // connect irrelevant element directly between echelons
         (0 until _input_width).foreach{
           case n if n==cas_0 || n==cas_1 => //do nothing 
           case n => {
             echelons(input_stage_idx+1).stage_elements(n) := echelons(input_stage_idx).stage_elements(n)
-            printf(cf"stage ${input_stage_idx}: directly connecting ${n}")
+            // printf(cf"stage ${input_stage_idx}: directly connecting ${n}\n")
           }
         }
     }
