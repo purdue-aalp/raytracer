@@ -5,6 +5,7 @@ import chiseltest._
 import org.scalatest.freespec.AnyFreeSpec 
 import scala.util.Random 
 import scala.math._
+import baseline_datapath.raytracer_gold._
 
 import java.nio.ByteBuffer 
 
@@ -45,33 +46,50 @@ object bitsToFloat{
 class Datapath_test extends AnyFreeSpec with ChiselScalatestTester{
   val r = new Random()
 
-  "calculated sum should be close if not equal" in {
-    test(new Datapath).withAnnotations(
-      Seq(VerilatorBackendAnnotation, WriteVcdAnnotation)
-    ){dut =>
+"Small Ray inside box" in {
+  val b = Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f)
+  val r = new Ray(float_3(0.5f, -0.5f, 0.5f), float_3(0.0001f, -0.0001f, -0.001f))
+  val result = RaytracerGold.testIntersection(r, b)
+  print(result)
+}
 
-      def update_random_inputs(dut: Datapath): Float = {
-        val input_ports = Seq(dut.ray.dir.x, dut.ray.dir.y, dut.ray.dir.z, dut.ray.origin.x, dut.ray.origin.y, dut.ray.origin.z, dut.ray.inv.x, dut.ray.inv.y, dut.ray.inv.z, dut.ray.extent, dut.aabb.x_min, dut.aabb.x_max, dut.aabb.y_min, dut.aabb.y_max, dut.aabb.z_min, dut.aabb.z_max)
-        val corresponding_rand_floats =  input_ports.map(_=>r.nextFloat())
-        val corresponding_rand_bits = corresponding_rand_floats.map(floatToBits(_))
-        val sum = corresponding_rand_floats.sum 
+"Ray outside box pointing away" in {
+  val b = Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f)
+  val r = new Ray(float_3(2.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f))
+  val result = RaytracerGold.testIntersection(r, b)
+  print(result)
+}
 
-        // assignment
-        input_ports.zip(corresponding_rand_bits).map{case (x,y)=>x.poke(y)}
+"Ray on edge of box pointing away" in {
+  val b = Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f)
+  val r = new Ray(float_3(1.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f))
+  val result = RaytracerGold.testIntersection(r, b)
+  print(result)
+}
 
-        sum
-      }
+"Ray on corner of box pointing away" in {
+  val b = Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f)
+  val r = new Ray(float_3(1.0f, 1.0f, 1.0f), float_3(1.0f, 1.0f, 1.0f))
+  val result = RaytracerGold.testIntersection(r, b)
+  print(result)
+}
 
-      for(_ <- 0 to 20){
-        val sum = update_random_inputs(dut)
-        for(_ <- 0 until 3){
-          dut.clock.step(1)
-          val hw_sum = bitsToFloat( dut.isIntersect.peek() )
-          println(s"sw: ${sum}, hw: ${hw_sum}, diff_ratio: ${(abs(sum-hw_sum)/sum)}")
-        }
-        val hw_sum = bitsToFloat( dut.isIntersect.peek())
-        assert((abs(sum-hw_sum)/sum)<0.01)
-      }
-    }
-  }
+"Ray on corner of box pointing along edge" in {
+  val b = Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f)
+  val r = new Ray(float_3(1.0f, 1.0f, 1.0f), float_3(0.0f, -1.0f, 0.0f))
+  val result = RaytracerGold.testIntersection(r, b)
+  print(result)
+}
+
+"Ray outside box pointing towards box" in {
+  val b = Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f)
+  val r = new Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f))
+  val result = RaytracerGold.testIntersection(r, b)
+  print(result)
+}
+
+  "Ray hits node 1 then node 2" in {}
+  "Ray hits node 4 then 1 then 2 then misses 3" in {}
+  "Ray outside box pointing along edge" in {}
+
 }
