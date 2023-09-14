@@ -79,7 +79,10 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   ): Unit = {
     description in {
       test(new Datapath_wrapper).withAnnotations(
-        Seq(VerilatorBackendAnnotation, CachingAnnotation, CachingDebugAnnotation,
+        Seq(
+          VerilatorBackendAnnotation,
+          CachingAnnotation,
+          CachingDebugAnnotation,
           TargetDirAnnotation("cached_verilator_backend/Datapath")
         )
       ) { dut =>

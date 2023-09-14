@@ -1,24 +1,21 @@
 package baseline_datapath
 
-import chisel3._ 
+import chisel3._
 import hardfloat._
 
-
-/**
-  * Given two input Recorded-format Floats `a` and `b`, output either `c` or
-  * `d` depending on the result of comparison:
-  * 
-  *     c_out = (a > b || (a==b && option)) ? c : d 
-  *     d_out = "the other of c and d"
-  * 
+/** Given two input Recorded-format Floats `a` and `b`, output either `c` or `d`
+  * depending on the result of comparison:
+  *
+  * c_out = (a > b || (a==b && option)) ? c : d d_out = "the other of c and d"
+  *
   * This is a combinatorial circuit. Parameter "option" controls the behavior
-  * when a===b.  
+  * when a===b.
   */
-class RecFNCompareSelect (
-  val option: Boolean,
-  val passthrough_type: Bits
+class RecFNCompareSelect(
+    val option: Boolean,
+    val passthrough_type: Bits
 ) extends Module {
-  val io = IO(new Bundle{
+  val io = IO(new Bundle {
     // compare these two inputs
     val a = Input(Bits(33.W))
     val b = Input(Bits(33.W))
@@ -33,17 +30,17 @@ class RecFNCompareSelect (
   })
 
   val fu = Module(new CompareRecFN(8, 24))
-  fu.io.a := this.io.a 
-  fu.io.b := this.io.b 
-  fu.io.signaling := true.B 
+  fu.io.a := this.io.a
+  fu.io.b := this.io.b
+  fu.io.signaling := true.B
 
-  when(fu.io.gt){
+  when(fu.io.gt) {
     this.io.c_out := this.io.c
     this.io.d_out := this.io.d
-  } .elsewhen(option.B && fu.io.eq){
+  }.elsewhen(option.B && fu.io.eq) {
     this.io.c_out := this.io.c
     this.io.d_out := this.io.d
-  } .otherwise {
+  }.otherwise {
     this.io.c_out := this.io.d
     this.io.d_out := this.io.c
   }
