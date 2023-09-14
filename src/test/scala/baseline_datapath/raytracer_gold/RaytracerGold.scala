@@ -138,7 +138,7 @@ object RaytracerGold {
     tmax = min(tmax, ray.extent)
 
 
-    val retval = if(tmin <= tmax){
+    val retval = if(tmin < tmax){
       Some(tmin)
     } else None
 

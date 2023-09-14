@@ -32,7 +32,7 @@ class Datapath extends Module {
   val _neg_1_0_RecFN = {
     val convert_zero_int_to_zero_rec_float = Module(new INToRecFN(32, 8, 24))
     convert_zero_int_to_zero_rec_float.io.signedIn := true.B 
-    convert_zero_int_to_zero_rec_float.io.in := 0xFFFFFFFFL.U(32.W)
+    convert_zero_int_to_zero_rec_float.io.in := -1.S(32.W).asUInt
     convert_zero_int_to_zero_rec_float.io.roundingMode := _rounding_rule
     convert_zero_int_to_zero_rec_float.io.detectTininess := _tininess_rule 
     val out_val = convert_zero_int_to_zero_rec_float.io.out 
@@ -201,7 +201,7 @@ class Datapath extends Module {
   comp_tmin_tmax.io.b := tmax 
   comp_tmin_tmax.io.signaling := true.B 
 
-  isIntersect_5 := comp_tmin_tmax.io.lt || comp_tmin_tmax.io.eq
+  isIntersect_5 := comp_tmin_tmax.io.lt 
   tmin_out_rec_5 := tmin
 
   //
@@ -209,10 +209,16 @@ class Datapath extends Module {
   //
 
   val isIntersect_6 = RegNext(isIntersect_5)
-  val tmin_out_6 = RegNext(fNFromRecFN(8, 24, tmin_out_rec_5))
+  val tmin_out_6 = RegNext(
+    Mux(
+      isIntersect_5, 
+      fNFromRecFN(8, 24, tmin_out_rec_5), 
+      fNFromRecFN(8, 24, _neg_1_0_RecFN)
+      )
+  )
 
   io.isIntersect := isIntersect_6
-  io.tmin_out := Mux(isIntersect_6, tmin_out_6, _neg_1_0_RecFN)
+  io.tmin_out := tmin_out_6
 
   {
   // //
