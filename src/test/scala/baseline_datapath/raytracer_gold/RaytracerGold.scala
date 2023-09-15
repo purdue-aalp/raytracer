@@ -152,4 +152,45 @@ object RaytracerGold {
 
     retval
   }
+
+  /**
+    * Generate a randomized AABB given the range
+    * -range <= x_min, x_max, y_min, y_max, z_min, z_max <= range
+    */
+  def genRandomBox(range: Float): SW_Box = {
+    import scala.util.Random
+    lazy val r = new Random()
+    assert(range > 0.0f)
+    val rands = (0 until 6).map{_=>r.nextFloat()*range*2 - range}
+    val b = new SW_Box(
+      min(rands(0), rands(1)), max(rands(0), rands(1)),
+      min(rands(2), rands(3)), max(rands(2), rands(3)),
+      min(rands(4), rands(5)), max(rands(4), rands(5)),
+      )
+    assert(b.x_min <= b.x_max)
+    assert(b.y_min <= b.y_max)
+    assert(b.z_min <= b.z_max)
+    b
+  }
+
+  /**
+    * Generate a randomized ray originating from a point within range
+    * -range <= origin.x, origin.y, origin.z <= range
+    *
+    * The x/y/z direction of ray is between -range and range  
+    * @param range
+    * @return
+    */
+  def genRandomRay(range: Float): SW_Ray = {
+    import scala.util.Random
+    lazy val r = new Random() 
+    assert(range > 0.0f)
+    val rands = (0 until 6).map{_=>r.nextFloat()*2*range - range}
+    val ray = new SW_Ray(
+      float_3(rands(0), rands(1), rands(2)),
+      float_3(rands(3), rands(4), rands(5))
+    )
+
+    ray
+  }
 }

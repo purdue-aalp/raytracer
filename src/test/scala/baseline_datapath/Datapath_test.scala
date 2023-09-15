@@ -70,12 +70,13 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   type HW_Box = baseline_datapath.AABB
 
   val r = new Random()
+  val N_RANDOM_TEST = 50000
 
   // Define a function for ray-box intersection testing
   def testRayBoxIntersection(
       description: String,
       box_seq: Seq[SW_Box],
-      ray: SW_Ray
+      ray_seq: Seq[SW_Ray]
   ): Unit = {
     description in {
       test(new Datapath_wrapper).withAnnotations(
@@ -86,7 +87,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
           TargetDirAnnotation("cached_verilator_backend/Datapath")
         )
       ) { dut =>
-        box_seq.foreach { box =>
+        for(box <- box_seq; ray <- ray_seq) {
           // Test for intersection
           val result = RaytracerGold.testIntersection(ray, box)
           val expectedIntersect = result.nonEmpty
@@ -98,9 +99,9 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
           dut.io.isIntersect.expect(expectedIntersect.B)
 
           // Print the expected and actual tmin values
-          println(s"$description - expected tmin is ${result.getOrElse(
-              -1.0f
-            )}, actual tmin_out is ${bitsToFloat(dut.io.tmin_out.peek())}")
+          // println(s"$description - expected tmin is ${result.getOrElse(
+          //     -1.0f
+          //   )}, actual tmin_out is ${bitsToFloat(dut.io.tmin_out.peek())}")
         }
       }
     }
@@ -110,38 +111,38 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   testRayBoxIntersection(
     "Small Ray inside box",
     new SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: Nil,
-    new SW_Ray(float_3(0.5f, -0.5f, 0.5f), float_3(0.0001f, -0.0001f, -0.001f))
+    new SW_Ray(float_3(0.5f, -0.5f, 0.5f), float_3(0.0001f, -0.0001f, -0.001f)) :: Nil
   )
   testRayBoxIntersection(
     "Ray outside box pointing away",
     new SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: Nil,
-    new SW_Ray(float_3(2.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f))
+    new SW_Ray(float_3(2.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
   )
   testRayBoxIntersection(
     "Ray on edge of box pointing away",
     new SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: Nil,
-    new SW_Ray(float_3(1.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f))
+    new SW_Ray(float_3(1.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
   )
   testRayBoxIntersection(
     "Ray on corner of box pointing away",
     new SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: Nil,
-    new SW_Ray(float_3(1.0f, 1.0f, 1.0f), float_3(1.0f, 1.0f, 1.0f))
+    new SW_Ray(float_3(1.0f, 1.0f, 1.0f), float_3(1.0f, 1.0f, 1.0f)) :: Nil
   )
   testRayBoxIntersection(
     "Ray on corner of box pointing along edge",
     new SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: Nil,
-    new SW_Ray(float_3(1.0f, 1.0f, 1.0f), float_3(0.0f, -1.0f, 0.0f))
+    new SW_Ray(float_3(1.0f, 1.0f, 1.0f), float_3(0.0f, -1.0f, 0.0f)) :: Nil
   )
   testRayBoxIntersection(
     "Ray outside box pointing towards box",
     new SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: Nil,
-    new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f))
+    new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
   )
   testRayBoxIntersection(
     "Ray hits node 1 then node 2",
     new SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) ::
       new SW_Box(2.0f, 2.5f, -0.5f, 0.5f, -0.5f, 0.5f) :: Nil,
-    new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(10.0f, 0.0f, 0.0f))
+    new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(10.0f, 0.0f, 0.0f)) :: Nil
   )
 
   testRayBoxIntersection(
@@ -150,12 +151,18 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       new SW_Box(2.0f, 2.5f, -0.5f, 0.5f, -0.5f, 0.5f) ::
       new SW_Box(100.0f, 100.25f, -0.5f, 0.5f, -0.5f, 0.5f) ::
       new SW_Box(-5.0f, -4.0f, -0.5f, 0.5f, -0.5f, 0.5f) :: Nil,
-    new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(10.0f, 0.0f, 0.0f))
+    new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(10.0f, 0.0f, 0.0f)) :: Nil
   )
 
   testRayBoxIntersection(
     "Ray outside box pointing along edge",
     new SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: Nil,
-    new SW_Ray(float_3(1.0f, 2.0f, 1.0f), float_3(0.0f, -1.0f, 0.0f))
+    new SW_Ray(float_3(1.0f, 2.0f, 1.0f), float_3(0.0f, -1.0f, 0.0f)) :: Nil
+  )
+
+  testRayBoxIntersection(
+    s"${N_RANDOM_TEST} randomized rays and boxes within range -10000.0, 10000.0",
+    List.fill(math.sqrt(N_RANDOM_TEST).toInt){RaytracerGold.genRandomBox(10000)},
+    List.fill(math.sqrt(N_RANDOM_TEST).toInt){RaytracerGold.genRandomRay(10000)}
   )
 }
