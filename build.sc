@@ -30,7 +30,7 @@ object raytracer extends  SbtModule { m =>
 
   object test extends Tests with ScalaTest{
     override def ivyDeps = m.ivyDeps() ++ Agg(
-      ivy"edu.berkeley.cs::chiseltest:5.0.0"
+      ivy"edu.berkeley.cs::chiseltest:5.0.2"
     )
   }
 }

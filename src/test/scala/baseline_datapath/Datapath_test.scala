@@ -14,6 +14,7 @@ import java.nio.ByteBuffer
 import chiseltest.internal.CachingAnnotation
 import chiseltest.simulator.CachingDebugAnnotation
 import firrtl2.options.TargetDirAnnotation
+import chisel3.stage.ThrowOnFirstErrorAnnotation
 
 object floatToBits {
 
@@ -84,7 +85,11 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
           VerilatorBackendAnnotation,
           CachingAnnotation,
           CachingDebugAnnotation,
-          TargetDirAnnotation("cached_verilator_backend/Datapath")
+          TargetDirAnnotation("cached_verilator_backend/Datapath"),
+        )
+      ).withChiselAnnotations(
+        Seq(
+          // ThrowOnFirstErrorAnnotation  
         )
       ) { dut =>
         for(box <- box_seq; ray <- ray_seq) {
