@@ -3,18 +3,15 @@ package baseline_datapath
 import chisel3._
 import hardfloat._
 import chisel3.experimental.VecLiterals._ // for VecLit
+import chisel3.util._
 
 class Datapath extends Module {
-  val io = IO(new Bundle {
-    val ray = Input(new Ray(recorded_float = false))
-    val aabb = Input(new AABB(recorded_float = false))
-
-    // tmin_out is only meaningful if isIntersect===true.B
-    // Its value means the intersection happens at this many units of length from
-    // the ray origin.
-    val tmin_out = Output(Bits(32.W))
-    val isIntersect = Output(Bool())
-  })
+  val in = IO(Flipped(Decoupled(new RayBoxPair(recorded_float = false))))
+  
+  val out = IO(Decoupled(new Bundle{
+    val tmin_out = Bits(32.W)
+    val isIntersect = Bool()
+  })) 
 
   // SOME CONSTANTS
   val _rounding_rule = consts.round_near_even
@@ -38,11 +35,14 @@ class Datapath extends Module {
     out_val
   }
 
+  // always ready to accept jobs
+  in.ready := WireDefault(true.B)
+
   //
   // STAGE 1: REGISTER INPUTS
   //
-  val ray_1 = RegNext(io.ray)
-  val aabb_1 = RegNext(io.aabb)
+  val ray_1 = RegNext(in.bits.ray)
+  val aabb_1 = RegNext(in.bits.aabb)
 
   //
   // STAGE 2: CONVERT FLOAT FORMAT: 32->33
@@ -262,8 +262,9 @@ class Datapath extends Module {
     )
   )
 
-  io.isIntersect := isIntersect_6
-  io.tmin_out := tmin_out_6
+  out.bits.isIntersect := isIntersect_6
+  out.bits.tmin_out := tmin_out_6
+  out.valid := ShiftRegister(in.valid, 6)
 
   {
     // //

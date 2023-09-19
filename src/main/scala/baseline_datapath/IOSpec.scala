@@ -54,6 +54,12 @@ class AABB(recorded_float: Boolean = false) extends Bundle {
   def isRecordedFloat(): Boolean = { recorded_float }
 }
 
+
+class RayBoxPair (recorded_float: Boolean = false) extends Bundle{
+  val ray = new Ray(recorded_float)
+  val aabb = new AABB(recorded_float)
+}
+
 // Conversion circuits between 32-bit IEEE float and 33-bit recorded float
 
 object Float3ConvertRecFNtoFN {

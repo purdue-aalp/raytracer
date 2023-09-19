@@ -14,7 +14,7 @@ import java.nio.ByteBuffer
 import chiseltest.internal.CachingAnnotation
 import chiseltest.simulator.CachingDebugAnnotation
 import firrtl2.options.TargetDirAnnotation
-import chisel3.stage.ThrowOnFirstErrorAnnotation
+import chisel3.stage.{PrintFullStackTraceAnnotation,ThrowOnFirstErrorAnnotation}
 
 object floatToBits {
 
@@ -89,19 +89,20 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
         )
       ).withChiselAnnotations(
         Seq(
-          // ThrowOnFirstErrorAnnotation  
+          ThrowOnFirstErrorAnnotation
         )
       ) { dut =>
         for(box <- box_seq; ray <- ray_seq) {
           // Test for intersection
           val result = RaytracerGold.testIntersection(ray, box)
           val expectedIntersect = result.nonEmpty
-          dut.io.ray.poke(ray)
-          dut.io.aabb.poke(box)
+          dut.in.bits.ray.poke(ray)
+          dut.in.bits.aabb.poke(box)
+          dut.in.valid.poke(true.B)
           dut.clock.step(6)
 
           // Expect the intersection result to match the expected value
-          dut.io.isIntersect.expect(expectedIntersect.B)
+          dut.out.bits.isIntersect.expect(expectedIntersect.B)
 
           // Print the expected and actual tmin values
           // println(s"$description - expected tmin is ${result.getOrElse(
