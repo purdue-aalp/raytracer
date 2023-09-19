@@ -5,18 +5,11 @@ import baseline_datapath.floatToBits
 import chiseltest.testableUInt
 import scala.language.implicitConversions
 
-class float_3(
+case class float_3(
     val x: Float,
     val y: Float,
     val z: Float
 )
-
-// companion object for class float_3
-object float_3 {
-  def apply(_x: Float, _y: Float, _z: Float) = {
-    new float_3(_x, _y, _z)
-  }
-}
 
 class SW_Ray(
     val origin: float_3,
@@ -39,6 +32,15 @@ object SW_Ray {
     new SW_Ray(_ori, _dir)
   }
 }
+
+case class SW_Box(
+    val x_min: Float,
+    val x_max: Float,
+    val y_min: Float,
+    val y_max: Float,
+    val z_min: Float,
+    val z_max: Float
+)
 
 object RaytracerTestHelper {
   implicit class TestableHWRay(dut_ray: baseline_datapath.Ray) {
@@ -72,27 +74,12 @@ object RaytracerTestHelper {
       dut_box.z_max.poke(floatToBits(sw_box.z_max))
     }
   }
-}
 
-class SW_Box(
-    val x_min: Float,
-    val x_max: Float,
-    val y_min: Float,
-    val y_max: Float,
-    val z_min: Float,
-    val z_max: Float
-)
-
-object SW_Box {
-  def apply(
-      _xmin: Float,
-      _xmax: Float,
-      _ymin: Float,
-      _ymax: Float,
-      _zmin: Float,
-      _zmax: Float
-  ) = {
-    new SW_Box(_xmin, _xmax, _ymin, _ymax, _zmin, _zmax)
+  implicit class TestableRayBoxPair(dut_ray_box_pair: baseline_datapath.RayBoxPair) {
+    def poke(sw_ray: SW_Ray, sw_box : SW_Box) : Unit = {
+      dut_ray_box_pair.ray.poke(sw_ray)
+      dut_ray_box_pair.aabb.poke(sw_box)
+    }
   }
 }
 

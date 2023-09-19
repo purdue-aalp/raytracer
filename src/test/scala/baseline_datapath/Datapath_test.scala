@@ -96,8 +96,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
           // Test for intersection
           val result = RaytracerGold.testIntersection(ray, box)
           val expectedIntersect = result.nonEmpty
-          dut.in.bits.ray.poke(ray)
-          dut.in.bits.aabb.poke(box)
+          dut.in.bits.poke(ray, box)
           dut.in.valid.poke(true.B)
           dut.clock.step(6)
 
