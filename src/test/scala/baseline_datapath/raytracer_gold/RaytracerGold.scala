@@ -1,10 +1,48 @@
 package baseline_datapath.raytracer_gold
 
+import chisel3._
 import scala.math._
-import baseline_datapath.floatToBits
-import chiseltest.testableUInt
+import baseline_datapath._
+import chiseltest._
 import scala.language.implicitConversions
+import java.nio.ByteBuffer
 
+object floatToBits {
+
+  /** Given a Scala float, returns an Int directly casted from the bits of the
+    * float.
+    *
+    * Similar to C-code: int x; return y = *((float*)(&x));
+    *
+    * @param x
+    *   A Float value
+    * @return
+    *   The integer cast of x.
+    */
+  def apply(x: Float)(implicit width: Int = 32): UInt = {
+    val bb: ByteBuffer = ByteBuffer.allocate(8)
+    bb.putInt(0)
+    bb.putFloat(x)
+
+    // bb now looks like [00][00][00][00][x3][x2][x1][x0]
+    // The reason we allocate 8 bytes and pad the first four with zeros is to
+    // prevent negative x values from triggering a "UInt cannot be negative"
+    // error from Chisel.
+    // y will get truncated anyway
+    val y = bb.rewind().getLong()
+    y.U(width.W)
+  }
+}
+
+object bitsToFloat {
+  def apply(x: UInt): Float = {
+    assert(x.getWidth == 32)
+    val bb: ByteBuffer = ByteBuffer.allocate(4)
+    bb.putInt(x.litValue.intValue)
+    val y = bb.rewind().getFloat()
+    y
+  }
+}
 case class float_3(
     val x: Float,
     val y: Float,
@@ -80,6 +118,34 @@ object RaytracerTestHelper {
       dut_ray_box_pair.ray.poke(sw_ray)
       dut_ray_box_pair.aabb.poke(sw_box)
     }
+  }
+
+  implicit def fromSWRayAndSWBoxToRayBoxPair(rb: (SW_Ray, SW_Box)): RayBoxPair = {
+    import chisel3.experimental.BundleLiterals._
+    val (sw_ray, sw_box) = rb
+    val dummy_rmp = new RayBoxPair(false)
+    dummy_rmp.Lit(
+      _.ray.origin.x -> floatToBits(sw_ray.origin.x),
+      _.ray.origin.y -> floatToBits(sw_ray.origin.y),
+      _.ray.origin.z -> floatToBits(sw_ray.origin.z),
+      _.ray.dir.x -> floatToBits(sw_ray.dir.x),
+      _.ray.dir.y -> floatToBits(sw_ray.dir.y),
+      _.ray.dir.z -> floatToBits(sw_ray.dir.z),
+      _.ray.inv.x -> floatToBits(sw_ray.inv.x),
+      _.ray.inv.y -> floatToBits(sw_ray.inv.y),
+      _.ray.inv.z -> floatToBits(sw_ray.inv.z),
+      _.ray.extent -> floatToBits(sw_ray.extent),
+      _.aabb.x_min -> floatToBits(sw_box.x_min),
+      _.aabb.x_max -> floatToBits(sw_box.x_max),
+      _.aabb.y_min -> floatToBits(sw_box.y_min),
+      _.aabb.y_max -> floatToBits(sw_box.y_max),
+      _.aabb.z_min -> floatToBits(sw_box.z_min),
+      _.aabb.z_max -> floatToBits(sw_box.z_max)
+    )
+  }
+
+  implicit def fromSWRaySWBoxSeqToRayBoxPairSeq(rbseq: Seq[(SW_Ray, SW_Box)]) : Seq[RayBoxPair] = {
+    rbseq.map(fromSWRayAndSWBoxToRayBoxPair(_))
   }
 }
 

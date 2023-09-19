@@ -54,8 +54,7 @@ class AABB(recorded_float: Boolean = false) extends Bundle {
   def isRecordedFloat(): Boolean = { recorded_float }
 }
 
-
-class RayBoxPair (recorded_float: Boolean = false) extends Bundle{
+class RayBoxPair(recorded_float: Boolean = false) extends Bundle {
   val ray = new Ray(recorded_float)
   val aabb = new AABB(recorded_float)
 }

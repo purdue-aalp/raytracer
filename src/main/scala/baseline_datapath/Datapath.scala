@@ -7,11 +7,11 @@ import chisel3.util._
 
 class Datapath extends Module {
   val in = IO(Flipped(Decoupled(new RayBoxPair(recorded_float = false))))
-  
-  val out = IO(Decoupled(new Bundle{
+
+  val out = IO(Decoupled(new Bundle {
     val tmin_out = Bits(32.W)
     val isIntersect = Bool()
-  })) 
+  }))
 
   // SOME CONSTANTS
   val _rounding_rule = consts.round_near_even

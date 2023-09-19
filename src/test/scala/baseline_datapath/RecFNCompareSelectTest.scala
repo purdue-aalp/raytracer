@@ -5,6 +5,7 @@ import chiseltest._
 import org.scalatest.freespec.AnyFreeSpec
 import scala.util.Random
 import hardfloat._
+import baseline_datapath.raytracer_gold._
 
 import chisel3.stage.{
   PrintFullStackTraceAnnotation,

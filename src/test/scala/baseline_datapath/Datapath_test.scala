@@ -5,53 +5,16 @@ import chiseltest._
 import org.scalatest.freespec.AnyFreeSpec
 import scala.util.Random
 import scala.math._
-import baseline_datapath.raytracer_gold._
 import chiseltest.experimental.expose
+import chisel3.experimental.BundleLiterals._
 
-import RaytracerTestHelper._
+import baseline_datapath.raytracer_gold._
+import baseline_datapath.raytracer_gold.RaytracerTestHelper._ // implicit conversions
 
-import java.nio.ByteBuffer
 import chiseltest.internal.CachingAnnotation
 import chiseltest.simulator.CachingDebugAnnotation
 import firrtl2.options.TargetDirAnnotation
 import chisel3.stage.{PrintFullStackTraceAnnotation,ThrowOnFirstErrorAnnotation}
-
-object floatToBits {
-
-  /** Given a Scala float, returns an Int directly casted from the bits of the
-    * float.
-    *
-    * Similar to C-code: int x; return y = *((float*)(&x));
-    *
-    * @param x
-    *   A Float value
-    * @return
-    *   The integer cast of x.
-    */
-  def apply(x: Float)(implicit width: Int = 32): UInt = {
-    val bb: ByteBuffer = ByteBuffer.allocate(8)
-    bb.putInt(0)
-    bb.putFloat(x)
-
-    // bb now looks like [00][00][00][00][x3][x2][x1][x0]
-    // The reason we allocate 8 bytes and pad the first four with zeros is to
-    // prevent negative x values from triggering a "UInt cannot be negative"
-    // error from Chisel.
-    // y will get truncated anyway
-    val y = bb.rewind().getLong()
-    y.U(width.W)
-  }
-}
-
-object bitsToFloat {
-  def apply(x: UInt): Float = {
-    assert(x.getWidth == 32)
-    val bb: ByteBuffer = ByteBuffer.allocate(4)
-    bb.putInt(x.litValue.intValue)
-    val y = bb.rewind().getFloat()
-    y
-  }
-}
 
 class Datapath_wrapper extends Datapath {
   import hardfloat._
@@ -92,22 +55,32 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
           ThrowOnFirstErrorAnnotation
         )
       ) { dut =>
-        for(box <- box_seq; ray <- ray_seq) {
-          // Test for intersection
-          val result = RaytracerGold.testIntersection(ray, box)
-          val expectedIntersect = result.nonEmpty
-          dut.in.bits.poke(ray, box)
-          dut.in.valid.poke(true.B)
-          dut.clock.step(6)
+        dut.in.initSource().setSourceClock(dut.clock)
+        dut.out.initSink().setSinkClock(dut.clock)
 
-          // Expect the intersection result to match the expected value
-          dut.out.bits.isIntersect.expect(expectedIntersect.B)
-
-          // Print the expected and actual tmin values
-          // println(s"$description - expected tmin is ${result.getOrElse(
-          //     -1.0f
-          //   )}, actual tmin_out is ${bitsToFloat(dut.io.tmin_out.peek())}")
+        // cartesian product of all boxes and rays
+        val ray_box_seq = for(ray <- ray_seq; box <- box_seq) yield (ray, box)
+        
+        // a sequence of software gold results
+        val sw_result_seq : Seq[Option[Float]] = ray_box_seq.map{
+          case(r, b) => RaytracerGold.testIntersection(r, b)
         }
+
+        // hardware-format result, of the type 
+        // Bundle{val tmin_out: Bits, val isIntersect: Bool}
+        val expectedResult = sw_result_seq.map{x => 
+          chiselTypeOf(dut.out.bits).Lit(
+            _.tmin_out -> x.map(floatToBits(_)).getOrElse(floatToBits(-1.0f)),
+            _.isIntersect -> x.nonEmpty.B
+          )
+        }
+
+        fork{
+          dut.in.enqueueSeq(ray_box_seq)
+        }.fork{
+          dut.out.expectDequeueSeq(expectedResult)
+        }.join()
+
       }
     }
   }

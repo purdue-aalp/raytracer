@@ -5,6 +5,7 @@ import chiseltest._
 import org.scalatest.freespec.AnyFreeSpec
 import scala.util.Random
 import hardfloat._
+import baseline_datapath.raytracer_gold._
 
 // to support Vec literals
 import chisel3.experimental.VecLiterals._
