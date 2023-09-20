@@ -18,6 +18,7 @@ import chisel3.stage.{PrintFullStackTraceAnnotation,ThrowOnFirstErrorAnnotation}
 
 class Datapath_wrapper extends Datapath {
   import hardfloat._
+  val exposed_time = expose(_time)
   val exposed_tmin = expose(fNFromRecFN(8, 24, tmin))
   val exposed_tmax = expose(fNFromRecFN(8, 24, tmax))
   val exposed_aabb_3 = expose(AABBConvertRecFNtoFN(aabb_3))
@@ -47,7 +48,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
         Seq(
           VerilatorBackendAnnotation,
           CachingAnnotation,
-          CachingDebugAnnotation,
+          // CachingDebugAnnotation,
           TargetDirAnnotation("cached_verilator_backend/Datapath"),
         )
       ).withChiselAnnotations(
@@ -58,17 +59,29 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
         dut.in.initSource().setSourceClock(dut.clock)
         dut.out.initSink().setSinkClock(dut.clock)
 
+        // Everything we pass to the DecoupledDriver are LazyList, 
+        // which means elements won't be evaluated until they are accessed.
+        // Furhtermore, using `def` instead of `val` allows garbage collection
+        // to destroy spent elements ASAP.
+
         // cartesian product of all boxes and rays
-        val ray_box_seq = for(ray <- ray_seq; box <- box_seq) yield (ray, box)
+        def ray_box_list = LazyList.from{
+          for(ray <- ray_seq; box <- box_seq) yield (ray, box)
+        }
         
         // a sequence of software gold results
-        val sw_result_seq : Seq[Option[Float]] = ray_box_seq.map{
-          case(r, b) => RaytracerGold.testIntersection(r, b)
+        def sw_result_seq : LazyList[Option[Float]] = {
+          ray_box_list.map{
+            case(r, b) => {
+              // println("calculated a sw result")
+              RaytracerGold.testIntersection(r, b)
+            }
+          }
         }
 
         // hardware-format result, of the type 
         // Bundle{val tmin_out: Bits, val isIntersect: Bool}
-        val expectedResult = sw_result_seq.map{x => 
+        def expectedResult = sw_result_seq.map{x => 
           chiselTypeOf(dut.out.bits).Lit(
             _.tmin_out -> x.map(floatToBits(_)).getOrElse(floatToBits(-1.0f)),
             _.isIntersect -> x.nonEmpty.B
@@ -76,11 +89,12 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
         }
 
         fork{
-          dut.in.enqueueSeq(ray_box_seq)
+          dut.in.enqueueSeq(ray_box_list)
         }.fork{
           dut.out.expectDequeueSeq(expectedResult)
         }.join()
 
+        println(s"test ends at time ${dut.exposed_time.peek().litValue}")
       }
     }
   }

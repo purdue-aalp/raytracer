@@ -35,6 +35,11 @@ class Datapath extends Module {
     out_val
   }
 
+  // A cycle counter, that we can use when debugging the module
+  // It shall disappear in synthesis, so no PPA impact
+  val (_time, _) = Counter(true.B, (1<<31)-1)
+  dontTouch(_time)
+
   // always ready to accept jobs
   in.ready := WireDefault(true.B)
 
