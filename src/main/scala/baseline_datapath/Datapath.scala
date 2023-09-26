@@ -26,12 +26,12 @@ class Datapath extends Module {
     out_val
   }
   val _neg_1_0_RecFN = {
-    val convert_zero_int_to_zero_rec_float = Module(new INToRecFN(32, 8, 24))
-    convert_zero_int_to_zero_rec_float.io.signedIn := true.B
-    convert_zero_int_to_zero_rec_float.io.in := -1.S(32.W).asUInt
-    convert_zero_int_to_zero_rec_float.io.roundingMode := _rounding_rule
-    convert_zero_int_to_zero_rec_float.io.detectTininess := _tininess_rule
-    val out_val = convert_zero_int_to_zero_rec_float.io.out
+    val convert_neg_one_int_to_neg_one_rec_float = Module(new INToRecFN(32, 8, 24))
+    convert_neg_one_int_to_neg_one_rec_float.io.signedIn := true.B
+    convert_neg_one_int_to_neg_one_rec_float.io.in := -1.S(32.W).asUInt
+    convert_neg_one_int_to_neg_one_rec_float.io.roundingMode := _rounding_rule
+    convert_neg_one_int_to_neg_one_rec_float.io.detectTininess := _tininess_rule
+    val out_val = convert_neg_one_int_to_neg_one_rec_float.io.out
     out_val
   }
 
