@@ -113,6 +113,9 @@ object RaytracerTestHelper {
     }
   }
 
+  // Whereas method poke(...) is called, expecting a RayBoxPair as argument,
+  // instead sees a SW_Ray and a SW_Box as arguments, this implicit conversion
+  // will be made.
   implicit class TestableRayBoxPair(dut_ray_box_pair: baseline_datapath.RayBoxPair) {
     def poke(sw_ray: SW_Ray, sw_box : SW_Box) : Unit = {
       dut_ray_box_pair.ray.poke(sw_ray)
@@ -120,6 +123,8 @@ object RaytracerTestHelper {
     }
   }
 
+  // Whereas a RayBoxPair is expected, but see instead a tuple[SW_Ray, SW_Box],
+  // this implicit conversion will be made.
   implicit def fromSWRayAndSWBoxToRayBoxPair(rb: (SW_Ray, SW_Box)): RayBoxPair = {
     import chisel3.experimental.BundleLiterals._
     val (sw_ray, sw_box) = rb
@@ -146,6 +151,37 @@ object RaytracerTestHelper {
 
   implicit def fromSWRaySWBoxSeqToRayBoxPairSeq(rbseq: Seq[(SW_Ray, SW_Box)]) : Seq[RayBoxPair] = {
     rbseq.map(fromSWRayAndSWBoxToRayBoxPair(_))
+  }
+
+  implicit def fromSWRayAndSWBoxesToCombinedRayBoxTriangleBundle(rb: (SW_Ray, Seq[SW_Box])): CombinedRayBoxTriangleBundle = {
+    import chisel3.experimental.BundleLiterals._
+    val (sw_ray, sw_box) = rb
+    val dummy_crbtb = new CombinedRayBoxTriangleBundle(false)
+
+    dummy_crbtb.Lit(
+      _.isTriangleOp -> false.B,
+      _.ray.origin.x -> floatToBits(sw_ray.origin.x),
+      _.ray.origin.y -> floatToBits(sw_ray.origin.y),
+      _.ray.origin.z -> floatToBits(sw_ray.origin.z),
+      _.ray.dir.x -> floatToBits(sw_ray.dir.x),
+      _.ray.dir.y -> floatToBits(sw_ray.dir.y),
+      _.ray.dir.z -> floatToBits(sw_ray.dir.z),
+      _.ray.inv.x -> floatToBits(sw_ray.inv.x),
+      _.ray.inv.y -> floatToBits(sw_ray.inv.y),
+      _.ray.inv.z -> floatToBits(sw_ray.inv.z),
+      _.ray.extent -> floatToBits(sw_ray.extent),
+      _.aabb(0).x_min -> floatToBits(sw_box.head.x_min),
+      _.aabb(0).x_max -> floatToBits(sw_box.head.x_max),
+      _.aabb(0).y_min -> floatToBits(sw_box.head.y_min),
+      _.aabb(0).y_max -> floatToBits(sw_box.head.y_max),
+      _.aabb(0).z_min -> floatToBits(sw_box.head.z_min),
+      _.aabb(0).z_max -> floatToBits(sw_box.head.z_max),
+      // ignore other three boxes
+    )
+  }
+
+  implicit def fromSWRayAndSWBoxesSeqToCombinedRayBoxTriangleBundleSeq(rbseq: Seq[(SW_Ray, Seq[SW_Box])]): Seq[CombinedRayBoxTriangleBundle] = {
+    rbseq.map(fromSWRayAndSWBoxesToCombinedRayBoxTriangleBundle(_))
   }
 }
 

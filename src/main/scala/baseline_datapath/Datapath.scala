@@ -6,7 +6,7 @@ import chisel3.experimental.VecLiterals._ // for VecLit
 import chisel3.util._
 
 class Datapath extends Module {
-  val in = IO(Flipped(Decoupled(new RayBoxPair(recorded_float = false))))
+  val in = IO(Flipped(Decoupled(new CombinedRayBoxTriangleBundle(recorded_float = false))))
 
   val out = IO(Decoupled(new Bundle {
     val tmin_out = Bits(32.W)
@@ -14,6 +14,7 @@ class Datapath extends Module {
   }))
 
   // SOME CONSTANTS
+  val _box_plurality = in.bits.aabb.length  // this should be a Chisel elaboration-time known variable 
   val _rounding_rule = consts.round_near_even
   val _tininess_rule = consts.tininess_beforeRounding
   val _zero_RecFN = {
@@ -51,7 +52,7 @@ class Datapath extends Module {
   // their coordinate-translated values.
   // Thanks to the last-connect semantics for this.
   val _shift_reg_length = 15
-  val geometries_shift_reg = Reg(Vec(_shift_reg_length, new RayBoxPair(recorded_float = true)))
+  val geometries_shift_reg = Reg(Vec(_shift_reg_length, new CombinedRayBoxTriangleBundle(recorded_float = true)))
   geometries_shift_reg(0) := 0.U.asTypeOf(geometries_shift_reg(0)) // force-feed zeros to input
   for(idx <- 1 until _shift_reg_length){
     geometries_shift_reg(idx) := geometries_shift_reg(idx-1)
@@ -67,7 +68,9 @@ class Datapath extends Module {
   // STAGE 2: CONVERT FLOAT FORMAT: 32->33
   //
   geometries_shift_reg(2).ray := RayConvertFNtoRecFN(ray_1)
-  geometries_shift_reg(2).aabb := AABBConvertFNtoRecFN(aabb_1)
+  geometries_shift_reg(2).aabb.zip(aabb_1).foreach{case(reg_2, reg_1) =>
+    reg_2 := AABBConvertFNtoRecFN(reg_1)  
+  }
 
   //
   // STAGE 3:  translate box relative to ray origin
@@ -83,22 +86,23 @@ class Datapath extends Module {
     child.y_max = child.y_max - ray.origin.y;
     child.z_max = child.z_max - ray.origin.z;
    */
+  for(box_idx <- 0 until _box_plurality)
   {
     val _dest = Seq(
-      geometries_shift_reg(3).aabb.x_min,
-      geometries_shift_reg(3).aabb.y_min,
-      geometries_shift_reg(3).aabb.z_min,
-      geometries_shift_reg(3).aabb.x_max,
-      geometries_shift_reg(3).aabb.y_max,
-      geometries_shift_reg(3).aabb.z_max
+      geometries_shift_reg(3).aabb(box_idx).x_min,
+      geometries_shift_reg(3).aabb(box_idx).y_min,
+      geometries_shift_reg(3).aabb(box_idx).z_min,
+      geometries_shift_reg(3).aabb(box_idx).x_max,
+      geometries_shift_reg(3).aabb(box_idx).y_max,
+      geometries_shift_reg(3).aabb(box_idx).z_max
     )
     val _src1 = Seq(
-      geometries_shift_reg(2).aabb.x_min,
-      geometries_shift_reg(2).aabb.y_min,
-      geometries_shift_reg(2).aabb.z_min,
-      geometries_shift_reg(2).aabb.x_max,
-      geometries_shift_reg(2).aabb.y_max,
-      geometries_shift_reg(2).aabb.z_max
+      geometries_shift_reg(2).aabb(box_idx).x_min,
+      geometries_shift_reg(2).aabb(box_idx).y_min,
+      geometries_shift_reg(2).aabb(box_idx).z_min,
+      geometries_shift_reg(2).aabb(box_idx).x_max,
+      geometries_shift_reg(2).aabb(box_idx).y_max,
+      geometries_shift_reg(2).aabb(box_idx).z_max
     )
     val _src2 = Seq(
       geometries_shift_reg(2).ray.origin.x,
@@ -125,8 +129,8 @@ class Datapath extends Module {
   //
   // STAGE 4: Time intersection interval calculations for each axis plane
   //
-  val tp_min_4 = Reg(new Float3(recorded_float = true))
-  val tp_max_4 = Reg(new Float3(recorded_float = true))
+  val tp_min_4 = Reg(Vec(_box_plurality, new Float3(recorded_float = true)))
+  val tp_max_4 = Reg(Vec(_box_plurality, new Float3(recorded_float = true)))
 
   // the following implements the C-code
   /*
@@ -137,22 +141,22 @@ class Datapath extends Module {
     float tp_max_y = child.y_max * ray.inv.y;
     float tp_max_z = child.z_max * ray.inv.z;
    */
-  {
+  for(box_idx <- 0 until _box_plurality){
     val _dest = Seq(
-      tp_min_4.x,
-      tp_min_4.y,
-      tp_min_4.z,
-      tp_max_4.x,
-      tp_max_4.y,
-      tp_max_4.z
+      tp_min_4(box_idx).x,
+      tp_min_4(box_idx).y,
+      tp_min_4(box_idx).z,
+      tp_max_4(box_idx).x,
+      tp_max_4(box_idx).y,
+      tp_max_4(box_idx).z
     )
     val _src1 = Seq(
-      geometries_shift_reg(3).aabb.x_min,
-      geometries_shift_reg(3).aabb.y_min,
-      geometries_shift_reg(3).aabb.z_min,
-      geometries_shift_reg(3).aabb.x_max,
-      geometries_shift_reg(3).aabb.y_max,
-      geometries_shift_reg(3).aabb.z_max
+      geometries_shift_reg(3).aabb(box_idx).x_min,
+      geometries_shift_reg(3).aabb(box_idx).y_min,
+      geometries_shift_reg(3).aabb(box_idx).z_min,
+      geometries_shift_reg(3).aabb(box_idx).x_max,
+      geometries_shift_reg(3).aabb(box_idx).y_max,
+      geometries_shift_reg(3).aabb(box_idx).z_max
     )
     val _src2 = Seq(
       geometries_shift_reg(3).ray.inv.x,
@@ -176,10 +180,10 @@ class Datapath extends Module {
   //
   // STAGE 5: SORTING
   //
-  val tmin_3d = Wire(new Float3(recorded_float = true))
-  val tmax_3d = Wire(new Float3(recorded_float = true))
-  val isIntersect_5 = Reg(Bool())
-  val tmin_out_rec_5 = Reg(Bits(33.W))
+  val tmin_3d = Wire(Vec(_box_plurality, new Float3(recorded_float = true)))
+  val tmax_3d = Wire(Vec(_box_plurality, new Float3(recorded_float = true)))
+  val isIntersect_5 = Reg(Vec(_box_plurality, Bool()))
+  val tmin_out_rec_5 = Reg(Vec(_box_plurality, Bits(33.W)))
 
   def flip_intervals_if_dir_is_neg(
       c_out: Bits,
@@ -204,62 +208,65 @@ class Datapath extends Module {
     fu.io.d := d
   }
 
-  flip_intervals_if_dir_is_neg(
-    tmin_3d.x,
-    tmax_3d.x,
-    geometries_shift_reg(4).ray.dir.x,
-    _zero_RecFN,
-    tp_min_4.x,
-    tp_max_4.x,
-    true
-  )
-  flip_intervals_if_dir_is_neg(
-    tmin_3d.y,
-    tmax_3d.y,
-    geometries_shift_reg(4).ray.dir.y,
-    _zero_RecFN,
-    tp_min_4.y,
-    tp_max_4.y,
-    true
-  )
-  flip_intervals_if_dir_is_neg(
-    tmin_3d.z,
-    tmax_3d.z,
-    geometries_shift_reg(4).ray.dir.z,
-    _zero_RecFN,
-    tp_min_4.z,
-    tp_max_4.z,
-    true
-  )
+  for(box_idx <- 0 until _box_plurality){
+    flip_intervals_if_dir_is_neg(
+      tmin_3d(box_idx).x,
+      tmax_3d(box_idx).x,
+      geometries_shift_reg(4).ray.dir.x,
+      _zero_RecFN,
+      tp_min_4(box_idx).x,
+      tp_max_4(box_idx).x,
+      true
+    )
+    flip_intervals_if_dir_is_neg(
+      tmin_3d(box_idx).y,
+      tmax_3d(box_idx).y,
+      geometries_shift_reg(4).ray.dir.y,
+      _zero_RecFN,
+      tp_min_4(box_idx).y,
+      tp_max_4(box_idx).y,
+      true
+    )
+    flip_intervals_if_dir_is_neg(
+      tmin_3d(box_idx).z,
+      tmax_3d(box_idx).z,
+      geometries_shift_reg(4).ray.dir.z,
+      _zero_RecFN,
+      tp_min_4(box_idx).z,
+      tp_max_4(box_idx).z,
+      true
+    )
 
-  // find the largest among all three dimensions of tmin_3d and 0.0f
-  // find the smallest among all three dimensions of tmax_3d and 0.0f
-  val tmin = Wire(Bits(33.W))
-  val tmax = Wire(Bits(33.W))
+    // find the largest among all three dimensions of tmin_3d(box_idx) and 0.0f
+    // find the smallest among all three dimensions of tmax_3d(box_idx) and 0.0f
+    val tmin = Wire(Bits(33.W))
+    val tmax = Wire(Bits(33.W))
 
-  val quad_sort_for_tmin = Module(new QuadSortRecFN())
-  quad_sort_for_tmin.io.in(0) := tmin_3d.x
-  quad_sort_for_tmin.io.in(1) := tmin_3d.y
-  quad_sort_for_tmin.io.in(2) := tmin_3d.z
-  quad_sort_for_tmin.io.in(3) := _zero_RecFN
-  tmin := quad_sort_for_tmin.io.largest
+    val quad_sort_for_tmin = Module(new QuadSortRecFN())
+    quad_sort_for_tmin.io.in(0) := tmin_3d(box_idx).x
+    quad_sort_for_tmin.io.in(1) := tmin_3d(box_idx).y
+    quad_sort_for_tmin.io.in(2) := tmin_3d(box_idx).z
+    quad_sort_for_tmin.io.in(3) := _zero_RecFN
+    tmin := quad_sort_for_tmin.io.largest
 
-  val quad_sort_for_tmax = Module(new QuadSortRecFN())
-  quad_sort_for_tmax.io.in(0) := tmax_3d.x
-  quad_sort_for_tmax.io.in(1) := tmax_3d.y
-  quad_sort_for_tmax.io.in(2) := tmax_3d.z
-  quad_sort_for_tmax.io.in(3) := geometries_shift_reg(4).ray.extent
-  tmax := quad_sort_for_tmax.io.smallest
+    val quad_sort_for_tmax = Module(new QuadSortRecFN())
+    quad_sort_for_tmax.io.in(0) := tmax_3d(box_idx).x
+    quad_sort_for_tmax.io.in(1) := tmax_3d(box_idx).y
+    quad_sort_for_tmax.io.in(2) := tmax_3d(box_idx).z
+    quad_sort_for_tmax.io.in(3) := geometries_shift_reg(4).ray.extent
+    tmax := quad_sort_for_tmax.io.smallest
 
-  // if there's overlap between [tmin, inf) and (-inf, tmax], we say ray-box
-  // intersection happens
-  val comp_tmin_tmax = Module(new CompareRecFN(8, 24))
-  comp_tmin_tmax.io.a := tmin
-  comp_tmin_tmax.io.b := tmax
-  comp_tmin_tmax.io.signaling := true.B
+    // if there's overlap between [tmin, inf) and (-inf, tmax], we say ray-box
+    // intersection happens
+    val comp_tmin_tmax = Module(new CompareRecFN(8, 24))
+    comp_tmin_tmax.io.a := tmin
+    comp_tmin_tmax.io.b := tmax
+    comp_tmin_tmax.io.signaling := true.B
 
-  isIntersect_5 := comp_tmin_tmax.io.lt
-  tmin_out_rec_5 := tmin
+    isIntersect_5(box_idx) := comp_tmin_tmax.io.lt
+    tmin_out_rec_5(box_idx) := tmin
+  }
+
 
   //
   // STAGE 6: 33->32 CONVERSION AND OUTPUT DRIVING
@@ -268,8 +275,8 @@ class Datapath extends Module {
   val isIntersect_6 = RegNext(isIntersect_5)
   val tmin_out_6 = RegNext(
     Mux(
-      isIntersect_5,
-      fNFromRecFN(8, 24, tmin_out_rec_5),
+      isIntersect_5(0),
+      fNFromRecFN(8, 24, tmin_out_rec_5(0)),
       fNFromRecFN(8, 24, _neg_1_0_RecFN)
     )
   )

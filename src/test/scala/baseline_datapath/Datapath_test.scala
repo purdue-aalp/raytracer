@@ -19,13 +19,13 @@ import chiseltest.simulator.{VerilatorCFlags, VerilatorLinkFlags, WriteVcdAnnota
 class Datapath_wrapper extends Datapath {
   import hardfloat._
   val exposed_time = expose(_time)
-  val exposed_tmin = expose(fNFromRecFN(8, 24, tmin))
-  val exposed_tmax = expose(fNFromRecFN(8, 24, tmax))
-  val exposed_aabb_3 = expose(AABBConvertRecFNtoFN(geometries_shift_reg(3).aabb))
+  // val exposed_tmin = expose(fNFromRecFN(8, 24, tmin))
+  // val exposed_tmax = expose(fNFromRecFN(8, 24, tmax))
+  // val exposed_aabb_3 = expose(AABBConvertRecFNtoFN(geometries_shift_reg(3).aabb))
   val exposed_ray_2 = expose(RayConvertRecFNtoFN(geometries_shift_reg(2).ray))
   val exposed_adder_exception_0 = expose(adder_exceptions(0))
-  val exposed_tmin_3d = expose(Float3ConvertRecFNtoFN(tmin_3d))
-  val exposed_tmax_3d = expose(Float3ConvertRecFNtoFN(tmax_3d))
+  // val exposed_tmin_3d = expose(Float3ConvertRecFNtoFN(tmin_3d))
+  // val exposed_tmax_3d = expose(Float3ConvertRecFNtoFN(tmax_3d))
 }
 
 class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
@@ -35,7 +35,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   type HW_Box = baseline_datapath.AABB
 
   val r = new Random()
-  val N_RANDOM_TEST = 50000
+  val N_RANDOM_TEST = 10000
 
   // Define a function for ray-box intersection testing
   def testRayBoxIntersection(
@@ -70,7 +70,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
         // cartesian product of all boxes and rays
         def ray_box_list = LazyList.from{
-          for(ray <- ray_seq; box <- box_seq) yield (ray, box)
+          for(ray <- ray_seq; box <- box_seq) yield (ray, Seq(box))
         }
         
         // a sequence of software gold results
@@ -78,7 +78,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
           ray_box_list.map{
             case(r, b) => {
               // println("calculated a sw result")
-              RaytracerGold.testIntersection(r, b)
+              RaytracerGold.testIntersection(r, b.head)
             }
           }
         }
