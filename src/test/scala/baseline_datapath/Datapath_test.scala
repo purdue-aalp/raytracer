@@ -12,9 +12,9 @@ import baseline_datapath.raytracer_gold._
 import baseline_datapath.raytracer_gold.RaytracerTestHelper._ // implicit conversions
 
 import chiseltest.internal.CachingAnnotation
-import chiseltest.simulator.CachingDebugAnnotation
 import firrtl2.options.TargetDirAnnotation
 import chisel3.stage.{PrintFullStackTraceAnnotation,ThrowOnFirstErrorAnnotation}
+import chiseltest.simulator.{VerilatorCFlags, VerilatorLinkFlags, WriteVcdAnnotation, CachingDebugAnnotation}
 
 class Datapath_wrapper extends Datapath {
   import hardfloat._
@@ -50,6 +50,9 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
           CachingAnnotation,
           // CachingDebugAnnotation,
           TargetDirAnnotation("cached_verilator_backend/Datapath"),
+          // WriteVcdAnnotation,
+          VerilatorCFlags(Seq("-O3")),
+          VerilatorLinkFlags(Seq("-O3"))
         )
       ).withChiselAnnotations(
         Seq(
