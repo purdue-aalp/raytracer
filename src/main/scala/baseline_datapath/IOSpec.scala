@@ -54,9 +54,22 @@ class AABB(recorded_float: Boolean = false) extends Bundle {
   def isRecordedFloat(): Boolean = { recorded_float }
 }
 
+class Triangle(recorded_float: Boolean = false) extends Bundle{}
+
 class RayBoxPair(recorded_float: Boolean = false) extends Bundle {
   val ray = new Ray(recorded_float)
   val aabb = new AABB(recorded_float)
+}
+
+class CombinedRayBoxTriangleBundle(recorded_float: Boolean = false) extends Bundle {
+  val ray = new Ray(recorded_float)
+
+  val aabb = Vec(4, new AABB(recorded_float))
+  val triangle = new Triangle(recorded_float)
+
+  // if true, perform ray-triangle intersection test
+  // if false, perform ray-box interesction tests
+  val isTriangleOp = Bool()
 }
 
 // Conversion circuits between 32-bit IEEE float and 33-bit recorded float

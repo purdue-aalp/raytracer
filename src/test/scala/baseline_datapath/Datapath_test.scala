@@ -21,8 +21,8 @@ class Datapath_wrapper extends Datapath {
   val exposed_time = expose(_time)
   val exposed_tmin = expose(fNFromRecFN(8, 24, tmin))
   val exposed_tmax = expose(fNFromRecFN(8, 24, tmax))
-  val exposed_aabb_3 = expose(AABBConvertRecFNtoFN(aabb_3))
-  val exposed_ray_2 = expose(RayConvertRecFNtoFN(ray_2))
+  val exposed_aabb_3 = expose(AABBConvertRecFNtoFN(geometries_shift_reg(3).aabb))
+  val exposed_ray_2 = expose(RayConvertRecFNtoFN(geometries_shift_reg(2).ray))
   val exposed_adder_exception_0 = expose(adder_exceptions(0))
   val exposed_tmin_3d = expose(Float3ConvertRecFNtoFN(tmin_3d))
   val exposed_tmax_3d = expose(Float3ConvertRecFNtoFN(tmax_3d))
@@ -56,7 +56,8 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
         )
       ).withChiselAnnotations(
         Seq(
-          ThrowOnFirstErrorAnnotation
+          ThrowOnFirstErrorAnnotation,
+          PrintFullStackTraceAnnotation
         )
       ) { dut =>
         dut.in.initSource().setSourceClock(dut.clock)

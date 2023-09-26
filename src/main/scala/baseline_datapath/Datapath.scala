@@ -43,6 +43,20 @@ class Datapath extends Module {
   // always ready to accept jobs
   in.ready := WireDefault(true.B)
 
+  // A shift register for the ray, boxes, and triangle inputs of each cycle.
+  // We will chain-up everything, and force feed zero bits to the input 
+  // However later in the code, we will overwrite "index 2" of this shift
+  // register with the post format-conversion values of the ray, boxes and
+  // triangle. We will then overwrite "index 3" of the boxes and triangles with
+  // their coordinate-translated values.
+  // Thanks to the last-connect semantics for this.
+  val _shift_reg_length = 15
+  val geometries_shift_reg = Reg(Vec(_shift_reg_length, new RayBoxPair(recorded_float = true)))
+  geometries_shift_reg(0) := 0.U.asTypeOf(geometries_shift_reg(0)) // force-feed zeros to input
+  for(idx <- 1 until _shift_reg_length){
+    geometries_shift_reg(idx) := geometries_shift_reg(idx-1)
+  }
+
   //
   // STAGE 1: REGISTER INPUTS
   //
@@ -52,17 +66,12 @@ class Datapath extends Module {
   //
   // STAGE 2: CONVERT FLOAT FORMAT: 32->33
   //
-  val ray_rec_next = RayConvertFNtoRecFN(ray_1)
-  val aabb_rec_next = AABBConvertFNtoRecFN(aabb_1)
-  val ray_2 = RegNext(ray_rec_next)
-  val aabb_2 = RegNext(aabb_rec_next)
+  geometries_shift_reg(2).ray := RayConvertFNtoRecFN(ray_1)
+  geometries_shift_reg(2).aabb := AABBConvertFNtoRecFN(aabb_1)
 
   //
   // STAGE 3:  translate box relative to ray origin
   //
-  val ray_3 = RegNext(ray_2)
-  val aabb_3 = Reg(new AABB(recorded_float = true))
-
   val adder_exceptions = Seq.fill(6)(Wire(UInt(5.W)))
 
   // the following implements the C-code:
@@ -76,28 +85,28 @@ class Datapath extends Module {
    */
   {
     val _dest = Seq(
-      aabb_3.x_min,
-      aabb_3.y_min,
-      aabb_3.z_min,
-      aabb_3.x_max,
-      aabb_3.y_max,
-      aabb_3.z_max
+      geometries_shift_reg(3).aabb.x_min,
+      geometries_shift_reg(3).aabb.y_min,
+      geometries_shift_reg(3).aabb.z_min,
+      geometries_shift_reg(3).aabb.x_max,
+      geometries_shift_reg(3).aabb.y_max,
+      geometries_shift_reg(3).aabb.z_max
     )
     val _src1 = Seq(
-      aabb_2.x_min,
-      aabb_2.y_min,
-      aabb_2.z_min,
-      aabb_2.x_max,
-      aabb_2.y_max,
-      aabb_2.z_max
+      geometries_shift_reg(2).aabb.x_min,
+      geometries_shift_reg(2).aabb.y_min,
+      geometries_shift_reg(2).aabb.z_min,
+      geometries_shift_reg(2).aabb.x_max,
+      geometries_shift_reg(2).aabb.y_max,
+      geometries_shift_reg(2).aabb.z_max
     )
     val _src2 = Seq(
-      ray_2.origin.x,
-      ray_2.origin.y,
-      ray_2.origin.z,
-      ray_2.origin.x,
-      ray_2.origin.y,
-      ray_2.origin.z
+      geometries_shift_reg(2).ray.origin.x,
+      geometries_shift_reg(2).ray.origin.y,
+      geometries_shift_reg(2).ray.origin.z,
+      geometries_shift_reg(2).ray.origin.x,
+      geometries_shift_reg(2).ray.origin.y,
+      geometries_shift_reg(2).ray.origin.z
     )
     (_dest zip _src1 zip _src2 zip adder_exceptions) foreach {
       case (((_1, _2), _3), _4) =>
@@ -118,8 +127,6 @@ class Datapath extends Module {
   //
   val tp_min_4 = Reg(new Float3(recorded_float = true))
   val tp_max_4 = Reg(new Float3(recorded_float = true))
-  val aabb_4 = RegNext(aabb_3) // aren't really used
-  val ray_4 = RegNext(ray_3)
 
   // the following implements the C-code
   /*
@@ -140,20 +147,20 @@ class Datapath extends Module {
       tp_max_4.z
     )
     val _src1 = Seq(
-      aabb_3.x_min,
-      aabb_3.y_min,
-      aabb_3.z_min,
-      aabb_3.x_max,
-      aabb_3.y_max,
-      aabb_3.z_max
+      geometries_shift_reg(3).aabb.x_min,
+      geometries_shift_reg(3).aabb.y_min,
+      geometries_shift_reg(3).aabb.z_min,
+      geometries_shift_reg(3).aabb.x_max,
+      geometries_shift_reg(3).aabb.y_max,
+      geometries_shift_reg(3).aabb.z_max
     )
     val _src2 = Seq(
-      ray_3.inv.x,
-      ray_3.inv.y,
-      ray_3.inv.z,
-      ray_3.inv.x,
-      ray_3.inv.y,
-      ray_3.inv.z
+      geometries_shift_reg(3).ray.inv.x,
+      geometries_shift_reg(3).ray.inv.y,
+      geometries_shift_reg(3).ray.inv.z,
+      geometries_shift_reg(3).ray.inv.x,
+      geometries_shift_reg(3).ray.inv.y,
+      geometries_shift_reg(3).ray.inv.z
     )
     (_dest zip _src1 zip _src2) foreach { case ((_1, _2), _3) =>
       val fu = Module(new MulRecFN(8, 24))
@@ -200,7 +207,7 @@ class Datapath extends Module {
   flip_intervals_if_dir_is_neg(
     tmin_3d.x,
     tmax_3d.x,
-    ray_4.dir.x,
+    geometries_shift_reg(4).ray.dir.x,
     _zero_RecFN,
     tp_min_4.x,
     tp_max_4.x,
@@ -209,7 +216,7 @@ class Datapath extends Module {
   flip_intervals_if_dir_is_neg(
     tmin_3d.y,
     tmax_3d.y,
-    ray_4.dir.y,
+    geometries_shift_reg(4).ray.dir.y,
     _zero_RecFN,
     tp_min_4.y,
     tp_max_4.y,
@@ -218,7 +225,7 @@ class Datapath extends Module {
   flip_intervals_if_dir_is_neg(
     tmin_3d.z,
     tmax_3d.z,
-    ray_4.dir.z,
+    geometries_shift_reg(4).ray.dir.z,
     _zero_RecFN,
     tp_min_4.z,
     tp_max_4.z,
@@ -241,7 +248,7 @@ class Datapath extends Module {
   quad_sort_for_tmax.io.in(0) := tmax_3d.x
   quad_sort_for_tmax.io.in(1) := tmax_3d.y
   quad_sort_for_tmax.io.in(2) := tmax_3d.z
-  quad_sort_for_tmax.io.in(3) := ray_4.extent
+  quad_sort_for_tmax.io.in(3) := geometries_shift_reg(4).ray.extent
   tmax := quad_sort_for_tmax.io.smallest
 
   // if there's overlap between [tmin, inf) and (-inf, tmax], we say ray-box
@@ -270,52 +277,5 @@ class Datapath extends Module {
   out.bits.isIntersect := isIntersect_6
   out.bits.tmin_out := tmin_out_6
   out.valid := ShiftRegister(in.valid, 6)
-
-  {
-    // //
-    // // STAGE 3: ADD
-    // //
-    //   val flattened_values = VecInit(Seq(
-    //     ray_rec.dir.x,
-    //     ray_rec.dir.y,
-    //     ray_rec.dir.z,
-    //     ray_rec.origin.x,
-    //     ray_rec.origin.y,
-    //     ray_rec.origin.z,
-    //     ray_rec.inv.x,
-    //     ray_rec.inv.y,
-    //     ray_rec.inv.z,
-    //     ray_rec.extent,
-    //     aabb_rec.x_max,
-    //     aabb_rec.x_min,
-    //     aabb_rec.y_max,
-    //     aabb_rec.y_min,
-    //     aabb_rec.z_max,
-    //     aabb_rec.z_min
-    //   ))
-
-    //   // RecFN's exponent has an additional bit
-    //   val recFNSum = Reg(Bits(33.W))
-
-    //   recFNSum := flattened_values.tail.foldLeft(flattened_values.head){(x,y) =>
-    //       // RecFN's exponent has an additional bit
-    //       val fu = Module(new AddRecFN(8+1, 24))
-    //       fu.io.subOp := false.B
-    //       fu.io.a := x
-    //       fu.io.b := y
-    //       fu.io.roundingMode := consts.round_near_even
-    //       fu.io.detectTininess := consts.tininess_afterRounding
-    //       fu.io.out
-    //   }
-    //
-    //
-    // //
-    // // STAGE 6: CONVERT FLOAT FORMAT: 33->32
-    // //
-    // // Here's a quirk about the API: although recFNSum has 9 bits of exponent, the
-    // // "expWidth" function argument of fNFromRecFN actually reflects that of the
-    // // output value. Hence the argument is 8 not 9.
-    // sum := fNFromRecFN(8, 24, recFNSum)
-  }
 
 }
