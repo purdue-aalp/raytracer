@@ -3,6 +3,7 @@ package baseline_datapath
 import chisel3._
 import hardfloat._
 import chisel3.experimental.VecLiterals._
+
 /** Implements a combinatorial 4-element recorded-format float sorting network
   *
   * The floats are expected to have 33-bits (8+1 bits of exponent, 1 bit of
@@ -58,21 +59,33 @@ class QuadSortRecFNWithIndex extends Module {
       /* Sort the indices */
       val index_unit = Module(new RecFNCompareSelect(false, Bits(35.W)))
       index_unit.io.a := echelons(input_stage_idx).stage_elements(cas_0)
-      index_unit.io.b := echelons(input_stage_idx).stage_elements(cas_1) 
-      index_unit.io.c := echelons(input_stage_idx).shuffled_indices(cas_0) ## echelons(input_stage_idx).stage_elements(cas_0)
-      index_unit.io.d := echelons(input_stage_idx).shuffled_indices(cas_1) ## echelons(input_stage_idx).stage_elements(cas_1)
+      index_unit.io.b := echelons(input_stage_idx).stage_elements(cas_1)
+      index_unit.io.c := echelons(input_stage_idx).shuffled_indices(
+        cas_0
+      ) ## echelons(input_stage_idx).stage_elements(cas_0)
+      index_unit.io.d := echelons(input_stage_idx).shuffled_indices(
+        cas_1
+      ) ## echelons(input_stage_idx).stage_elements(cas_1)
 
-      echelons(input_stage_idx + 1).shuffled_indices(cas_0) := index_unit.io.c_out(34,33)
-      echelons(input_stage_idx + 1).shuffled_indices(cas_1) := index_unit.io.d_out(34,33)
+      echelons(input_stage_idx + 1)
+        .shuffled_indices(cas_0) := index_unit.io.c_out(34, 33)
+      echelons(input_stage_idx + 1)
+        .shuffled_indices(cas_1) := index_unit.io.d_out(34, 33)
 
-      echelons(input_stage_idx + 1).stage_elements(cas_0) := index_unit.io.c_out(32, 0)
-      echelons(input_stage_idx + 1).stage_elements(cas_1) := index_unit.io.d_out(32, 0)      
+      echelons(input_stage_idx + 1)
+        .stage_elements(cas_0) := index_unit.io.c_out(32, 0)
+      echelons(input_stage_idx + 1)
+        .stage_elements(cas_1) := index_unit.io.d_out(32, 0)
 
-      (0 until _input_width).foreach{
-        case n if n == cas_0 || n == cas_1 => // do nothing 
+      (0 until _input_width).foreach {
+        case n if n == cas_0 || n == cas_1 => // do nothing
         case n => {
-          echelons(input_stage_idx + 1).shuffled_indices(n) := echelons(input_stage_idx).shuffled_indices(n)
-          echelons(input_stage_idx + 1).stage_elements(n) := echelons(input_stage_idx).stage_elements(n)
+          echelons(input_stage_idx + 1).shuffled_indices(n) := echelons(
+            input_stage_idx
+          ).shuffled_indices(n)
+          echelons(input_stage_idx + 1).stage_elements(n) := echelons(
+            input_stage_idx
+          ).stage_elements(n)
         }
       }
     }

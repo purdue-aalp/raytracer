@@ -6,15 +6,21 @@ import chisel3.experimental.VecLiterals._ // for VecLit
 import chisel3.util._
 
 class Datapath extends Module {
-  val in = IO(Flipped(Decoupled(new CombinedRayBoxTriangleBundle(recorded_float = false))))
+  val in = IO(
+    Flipped(Decoupled(new CombinedRayBoxTriangleBundle(recorded_float = false)))
+  )
 
+  // from index-0 to index-3, intersecting boxes goes before non-intersecting
+  // boxes, nearer hits go before further hits
   val out = IO(Decoupled(new Bundle {
-    val tmin_out = Bits(32.W)
-    val isIntersect = Bool()
+    val tmin_out = Vec(4, Bits(32.W))
+    val isIntersect = Vec(4, Bool())
+    val boxIndex = Vec(4, UInt(2.W))
   }))
 
   // SOME CONSTANTS
-  val _box_plurality = in.bits.aabb.length  // this should be a Chisel elaboration-time known variable 
+  val _box_plurality =
+    in.bits.aabb.length // this should be a Chisel elaboration-time known variable
   val _rounding_rule = consts.round_near_even
   val _tininess_rule = consts.tininess_beforeRounding
   val _zero_RecFN = {
@@ -27,7 +33,9 @@ class Datapath extends Module {
     out_val
   }
   val _neg_1_0_RecFN = {
-    val convert_neg_one_int_to_neg_one_rec_float = Module(new INToRecFN(32, 8, 24))
+    val convert_neg_one_int_to_neg_one_rec_float = Module(
+      new INToRecFN(32, 8, 24)
+    )
     convert_neg_one_int_to_neg_one_rec_float.io.signedIn := true.B
     convert_neg_one_int_to_neg_one_rec_float.io.in := -1.S(32.W).asUInt
     convert_neg_one_int_to_neg_one_rec_float.io.roundingMode := _rounding_rule
@@ -35,27 +43,35 @@ class Datapath extends Module {
     val out_val = convert_neg_one_int_to_neg_one_rec_float.io.out
     out_val
   }
+  val _positive_inf_RecFN = recFNFromFN(8, 24, 0x7f800000.U)
 
   // A cycle counter, that we can use when debugging the module
   // It shall disappear in synthesis, so no PPA impact
-  val (_time, _) = Counter(true.B, (1<<31)-1)
+  val (_time, _) = Counter(true.B, (1 << 31) - 1)
   dontTouch(_time)
 
   // always ready to accept jobs
   in.ready := WireDefault(true.B)
 
   // A shift register for the ray, boxes, and triangle inputs of each cycle.
-  // We will chain-up everything, and force feed zero bits to the input 
+  // We will chain-up everything, and force feed zero bits to the input
   // However later in the code, we will overwrite "index 2" of this shift
   // register with the post format-conversion values of the ray, boxes and
   // triangle. We will then overwrite "index 3" of the boxes and triangles with
   // their coordinate-translated values.
   // Thanks to the last-connect semantics for this.
   val _shift_reg_length = 15
-  val geometries_shift_reg = Reg(Vec(_shift_reg_length, new CombinedRayBoxTriangleBundle(recorded_float = true)))
-  geometries_shift_reg(0) := 0.U.asTypeOf(geometries_shift_reg(0)) // force-feed zeros to input
-  for(idx <- 1 until _shift_reg_length){
-    geometries_shift_reg(idx) := geometries_shift_reg(idx-1)
+  val geometries_shift_reg = Reg(
+    Vec(
+      _shift_reg_length,
+      new CombinedRayBoxTriangleBundle(recorded_float = true)
+    )
+  )
+  geometries_shift_reg(0) := 0.U.asTypeOf(
+    geometries_shift_reg(0)
+  ) // force-feed zeros to input
+  for (idx <- 1 until _shift_reg_length) {
+    geometries_shift_reg(idx) := geometries_shift_reg(idx - 1)
   }
 
   //
@@ -68,8 +84,8 @@ class Datapath extends Module {
   // STAGE 2: CONVERT FLOAT FORMAT: 32->33
   //
   geometries_shift_reg(2).ray := RayConvertFNtoRecFN(ray_1)
-  geometries_shift_reg(2).aabb.zip(aabb_1).foreach{case(reg_2, reg_1) =>
-    reg_2 := AABBConvertFNtoRecFN(reg_1)  
+  geometries_shift_reg(2).aabb.zip(aabb_1).foreach { case (reg_2, reg_1) =>
+    reg_2 := AABBConvertFNtoRecFN(reg_1)
   }
 
   //
@@ -86,8 +102,7 @@ class Datapath extends Module {
     child.y_max = child.y_max - ray.origin.y;
     child.z_max = child.z_max - ray.origin.z;
    */
-  for(box_idx <- 0 until _box_plurality)
-  {
+  for (box_idx <- 0 until _box_plurality) {
     val _dest = Seq(
       geometries_shift_reg(3).aabb(box_idx).x_min,
       geometries_shift_reg(3).aabb(box_idx).y_min,
@@ -141,7 +156,7 @@ class Datapath extends Module {
     float tp_max_y = child.y_max * ray.inv.y;
     float tp_max_z = child.z_max * ray.inv.z;
    */
-  for(box_idx <- 0 until _box_plurality){
+  for (box_idx <- 0 until _box_plurality) {
     val _dest = Seq(
       tp_min_4(box_idx).x,
       tp_min_4(box_idx).y,
@@ -208,7 +223,7 @@ class Datapath extends Module {
     fu.io.d := d
   }
 
-  for(box_idx <- 0 until _box_plurality){
+  for (box_idx <- 0 until _box_plurality) {
     flip_intervals_if_dir_is_neg(
       tmin_3d(box_idx).x,
       tmax_3d(box_idx).x,
@@ -267,22 +282,49 @@ class Datapath extends Module {
     tmin_out_rec_5(box_idx) := tmin
   }
 
+  //
+  // STAGE 6: sort four boxes
+  // Example: boxIndex=(2,3,1,0), tmin_out=(0.1f,1.0f,10.0f,+Inf),
+  // isIntersect(T,T,T,F)
+  // Means input box no.2 is the nearest hit, followed by input box no.3,
+  // followed by input box no.1. No.0 did not hit.
+  //
+  val isIntersect_6 = Reg(Vec(4, Bool()))
+  val tmin_out_rec_6 = Reg(Vec(4, Bits(33.W)))
+  val boxIndex_6 = Reg(Vec(4, UInt(2.W)))
+
+  val tmin_out_5_but_substitute_non_intersect_with_PInf =
+    tmin_out_rec_5.zip(isIntersect_5).map { case (rec_fn, b) =>
+      Mux(b, rec_fn, _positive_inf_RecFN)
+    }
+
+  // sorter outputs from biggest to smallest, so reverse output
+  val quad_sort_for_box_index = Module(new QuadSortRecFNWithIndex)
+  quad_sort_for_box_index.io.in := tmin_out_5_but_substitute_non_intersect_with_PInf
+  boxIndex_6 := quad_sort_for_box_index.io.sorted_indices.reverse
+
+  val quad_sort_for_t = Module(new QuadSortRecFN)
+  quad_sort_for_t.io.in := tmin_out_5_but_substitute_non_intersect_with_PInf
+  tmin_out_rec_6 := quad_sort_for_t.io.out.reverse
+
+  isIntersect_6.zip(quad_sort_for_box_index.io.sorted_indices.reverse).foreach {
+    case (b, idx) =>
+      b := isIntersect_5(idx)
+  }
 
   //
-  // STAGE 6: 33->32 CONVERSION AND OUTPUT DRIVING
+  // STAGE 7: 33->32 CONVERSION AND OUTPUT DRIVING
   //
 
-  val isIntersect_6 = RegNext(isIntersect_5)
-  val tmin_out_6 = RegNext(
-    Mux(
-      isIntersect_5(0),
-      fNFromRecFN(8, 24, tmin_out_rec_5(0)),
-      fNFromRecFN(8, 24, _neg_1_0_RecFN)
-    )
-  )
+  val isIntersect_7 = RegNext(isIntersect_6)
+  val boxIndex_7 = RegNext(boxIndex_6)
+  val tmin_out_7 = Reg(Vec(4, Bits(32.W)))
 
-  out.bits.isIntersect := isIntersect_6
-  out.bits.tmin_out := tmin_out_6
-  out.valid := ShiftRegister(in.valid, 6)
+  tmin_out_7 := tmin_out_rec_6.map(fNFromRecFN(8, 24, _))
+
+  out.bits.isIntersect := isIntersect_7
+  out.bits.tmin_out := tmin_out_7
+  out.bits.boxIndex := boxIndex_7
+  out.valid := ShiftRegister(in.valid, 7)
 
 }

@@ -72,12 +72,18 @@ object SW_Ray {
 }
 
 case class SW_Box(
-    val x_min: Float,
-    val x_max: Float,
-    val y_min: Float,
-    val y_max: Float,
-    val z_min: Float,
-    val z_max: Float
+    val x_min: Float = 0,
+    val x_max: Float = 0,
+    val y_min: Float = 0,
+    val y_max: Float = 0,
+    val z_min: Float = 0,
+    val z_max: Float = 0
+)
+
+case class SW_CombinedData(
+  val ray: SW_Ray ,
+  val boxes: Seq[SW_Box],
+  val isTriangleOp: Boolean
 )
 
 object RaytracerTestHelper {
@@ -123,6 +129,18 @@ object RaytracerTestHelper {
     }
   }
 
+  // implicit class TestableRayBoxTriangleBundle(dut_combined_port: baseline_datapath.CombinedRayBoxTriangleBundle) {
+  //   def poke(s: SW_CombinedData) : Unit = {
+  //     assert(s.boxes.length == 4)
+
+  //     dut_combined_port.isTriangleOp.poke(s.isTriangleOp)
+  //     dut_combined_port.ray.poke(s.ray)
+  //     for(i <- 0 until 4){
+  //       dut_combined_port.aabb(i).poke(s.boxes(i))
+  //     }
+  //   }
+  // }
+
   // Whereas a RayBoxPair is expected, but see instead a tuple[SW_Ray, SW_Box],
   // this implicit conversion will be made.
   implicit def fromSWRayAndSWBoxToRayBoxPair(rb: (SW_Ray, SW_Box)): RayBoxPair = {
@@ -153,13 +171,17 @@ object RaytracerTestHelper {
     rbseq.map(fromSWRayAndSWBoxToRayBoxPair(_))
   }
 
-  implicit def fromSWRayAndSWBoxesToCombinedRayBoxTriangleBundle(rb: (SW_Ray, Seq[SW_Box])): CombinedRayBoxTriangleBundle = {
+  implicit def fromSWRayAndSWBoxesToCombinedRayBoxTriangleBundle(rb: SW_CombinedData): CombinedRayBoxTriangleBundle = {
     import chisel3.experimental.BundleLiterals._
-    val (sw_ray, sw_box) = rb
+    val sw_ray= rb.ray
+    val sw_box = rb.boxes
+    val op = rb.isTriangleOp 
+    assert(sw_box.length == 4)
+
     val dummy_crbtb = new CombinedRayBoxTriangleBundle(false)
 
     dummy_crbtb.Lit(
-      _.isTriangleOp -> false.B,
+      _.isTriangleOp -> op.B,
       _.ray.origin.x -> floatToBits(sw_ray.origin.x),
       _.ray.origin.y -> floatToBits(sw_ray.origin.y),
       _.ray.origin.z -> floatToBits(sw_ray.origin.z),
@@ -170,17 +192,47 @@ object RaytracerTestHelper {
       _.ray.inv.y -> floatToBits(sw_ray.inv.y),
       _.ray.inv.z -> floatToBits(sw_ray.inv.z),
       _.ray.extent -> floatToBits(sw_ray.extent),
-      _.aabb(0).x_min -> floatToBits(sw_box.head.x_min),
-      _.aabb(0).x_max -> floatToBits(sw_box.head.x_max),
-      _.aabb(0).y_min -> floatToBits(sw_box.head.y_min),
-      _.aabb(0).y_max -> floatToBits(sw_box.head.y_max),
-      _.aabb(0).z_min -> floatToBits(sw_box.head.z_min),
-      _.aabb(0).z_max -> floatToBits(sw_box.head.z_max),
+      _.aabb(0) -> 
+        new AABB(false).Lit(
+          _.x_min -> floatToBits(sw_box(0).x_min),
+          _.x_max -> floatToBits(sw_box(0).x_max),
+          _.y_min -> floatToBits(sw_box(0).y_min),
+          _.y_max -> floatToBits(sw_box(0).y_max),
+          _.z_min -> floatToBits(sw_box(0).z_min),
+          _.z_max -> floatToBits(sw_box(0).z_max),
+        ),
+      _.aabb(1) -> 
+        new AABB(false).Lit(
+          _.x_min -> floatToBits(sw_box(1).x_min),
+          _.x_max -> floatToBits(sw_box(1).x_max),
+          _.y_min -> floatToBits(sw_box(1).y_min),
+          _.y_max -> floatToBits(sw_box(1).y_max),
+          _.z_min -> floatToBits(sw_box(1).z_min),
+          _.z_max -> floatToBits(sw_box(1).z_max),
+        ),
+      _.aabb(2) -> 
+        new AABB(false).Lit(
+          _.x_min -> floatToBits(sw_box(2).x_min),
+          _.x_max -> floatToBits(sw_box(2).x_max),
+          _.y_min -> floatToBits(sw_box(2).y_min),
+          _.y_max -> floatToBits(sw_box(2).y_max),
+          _.z_min -> floatToBits(sw_box(2).z_min),
+          _.z_max -> floatToBits(sw_box(2).z_max),
+        ),
+      _.aabb(3) -> 
+        new AABB(false).Lit(
+          _.x_min -> floatToBits(sw_box(3).x_min),
+          _.x_max -> floatToBits(sw_box(3).x_max),
+          _.y_min -> floatToBits(sw_box(3).y_min),
+          _.y_max -> floatToBits(sw_box(3).y_max),
+          _.z_min -> floatToBits(sw_box(3).z_min),
+          _.z_max -> floatToBits(sw_box(3).z_max),
+        ),
       // ignore other three boxes
     )
   }
 
-  implicit def fromSWRayAndSWBoxesSeqToCombinedRayBoxTriangleBundleSeq(rbseq: Seq[(SW_Ray, Seq[SW_Box])]): Seq[CombinedRayBoxTriangleBundle] = {
+  implicit def fromSWRayAndSWBoxesSeqToCombinedRayBoxTriangleBundleSeq(rbseq: Seq[SW_CombinedData]): Seq[CombinedRayBoxTriangleBundle] = {
     rbseq.map(fromSWRayAndSWBoxesToCombinedRayBoxTriangleBundle(_))
   }
 }
@@ -240,6 +292,32 @@ object RaytracerGold {
     } else None
 
     retval
+  }
+
+  case class SW_RayBox_Result(
+    val t_min: Seq[Float],
+    val is_intersect: Seq[Boolean],
+    val box_index: Seq[Int]
+  )
+
+  def testIntersection(ray: SW_Ray, box_seq: Seq[SW_Box]): SW_RayBox_Result = {
+    val four_results: Seq[Option[Float]] = box_seq.map(testIntersection(ray, _))
+
+    val unsorted_result = SW_RayBox_Result(
+      t_min = four_results.map(_.getOrElse(Float.PositiveInfinity)),
+      is_intersect = four_results.map(_.nonEmpty),
+      box_index = (0 until 4).toList
+    )
+
+    val sorted_result = unsorted_result.t_min.zip(unsorted_result.is_intersect).zip(unsorted_result.box_index).sortWith{
+      case(((t1, b1), idx1), ((t2, b2), idx2)) => t1 < t2
+    }
+
+    SW_RayBox_Result(
+      t_min = sorted_result.map(_._1._1),
+      is_intersect = sorted_result.map(_._1._2),
+      box_index = sorted_result.map(_._2)
+    )
   }
 
   /**
