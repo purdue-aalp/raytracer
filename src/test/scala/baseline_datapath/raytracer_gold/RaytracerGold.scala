@@ -71,13 +71,22 @@ object SW_Ray {
   }
 }
 
+/**
+ *  Default "constructor" places the box at +Inf, so that any ray will not
+ *  intersect with it. This is better than placing the default box at the point
+ *  of origin, which usually get calculated to be intersecting with a ray that
+ *  passes through the origin. It is common in human-written test cases to have
+ *  a origin-intersecting ray, and it is common too that some boxes are not
+ *  specified because the human just wanted to test a few boxes instead of all
+ *  four.  
+ */
 case class SW_Box(
-    val x_min: Float = 0,
-    val x_max: Float = 0,
-    val y_min: Float = 0,
-    val y_max: Float = 0,
-    val z_min: Float = 0,
-    val z_max: Float = 0
+    val x_min: Float = Float.PositiveInfinity,
+    val x_max: Float = Float.PositiveInfinity,
+    val y_min: Float = Float.PositiveInfinity,
+    val y_max: Float = Float.PositiveInfinity,
+    val z_min: Float = Float.PositiveInfinity,
+    val z_max: Float = Float.PositiveInfinity
 )
 
 case class SW_CombinedData(
@@ -86,48 +95,51 @@ case class SW_CombinedData(
   val isTriangleOp: Boolean
 )
 
+/**
+  * A bunch of implicit conversion methods between SW and HW data types
+  */
 object RaytracerTestHelper {
-  implicit class TestableHWRay(dut_ray: baseline_datapath.Ray) {
-    def poke(sw_ray: SW_Ray): Unit = {
-      assert(!dut_ray.isRecordedFloat())
-      dut_ray.origin.x.poke(floatToBits(sw_ray.origin.x))
-      dut_ray.origin.y.poke(floatToBits(sw_ray.origin.y))
-      dut_ray.origin.z.poke(floatToBits(sw_ray.origin.z))
+  // implicit class TestableHWRay(dut_ray: baseline_datapath.Ray) {
+  //   def poke(sw_ray: SW_Ray): Unit = {
+  //     assert(!dut_ray.isRecordedFloat())
+  //     dut_ray.origin.x.poke(floatToBits(sw_ray.origin.x))
+  //     dut_ray.origin.y.poke(floatToBits(sw_ray.origin.y))
+  //     dut_ray.origin.z.poke(floatToBits(sw_ray.origin.z))
 
-      dut_ray.dir.x.poke(floatToBits(sw_ray.dir.x))
-      dut_ray.dir.y.poke(floatToBits(sw_ray.dir.y))
-      dut_ray.dir.z.poke(floatToBits(sw_ray.dir.z))
+  //     dut_ray.dir.x.poke(floatToBits(sw_ray.dir.x))
+  //     dut_ray.dir.y.poke(floatToBits(sw_ray.dir.y))
+  //     dut_ray.dir.z.poke(floatToBits(sw_ray.dir.z))
 
-      dut_ray.inv.x.poke(floatToBits(sw_ray.inv.x))
-      dut_ray.inv.y.poke(floatToBits(sw_ray.inv.y))
-      dut_ray.inv.z.poke(floatToBits(sw_ray.inv.z))
+  //     dut_ray.inv.x.poke(floatToBits(sw_ray.inv.x))
+  //     dut_ray.inv.y.poke(floatToBits(sw_ray.inv.y))
+  //     dut_ray.inv.z.poke(floatToBits(sw_ray.inv.z))
 
-      dut_ray.extent.poke(floatToBits(sw_ray.extent))
-    }
-  }
+  //     dut_ray.extent.poke(floatToBits(sw_ray.extent))
+  //   }
+  // }
 
-  implicit class TestableHWAABB(dut_box: baseline_datapath.AABB) {
-    def poke(sw_box: SW_Box): Unit = {
-      assert(!dut_box.isRecordedFloat())
-      dut_box.x_min.poke(floatToBits(sw_box.x_min))
-      dut_box.y_min.poke(floatToBits(sw_box.y_min))
-      dut_box.z_min.poke(floatToBits(sw_box.z_min))
+  // implicit class TestableHWAABB(dut_box: baseline_datapath.AABB) {
+  //   def poke(sw_box: SW_Box): Unit = {
+  //     assert(!dut_box.isRecordedFloat())
+  //     dut_box.x_min.poke(floatToBits(sw_box.x_min))
+  //     dut_box.y_min.poke(floatToBits(sw_box.y_min))
+  //     dut_box.z_min.poke(floatToBits(sw_box.z_min))
 
-      dut_box.x_max.poke(floatToBits(sw_box.x_max))
-      dut_box.y_max.poke(floatToBits(sw_box.y_max))
-      dut_box.z_max.poke(floatToBits(sw_box.z_max))
-    }
-  }
+  //     dut_box.x_max.poke(floatToBits(sw_box.x_max))
+  //     dut_box.y_max.poke(floatToBits(sw_box.y_max))
+  //     dut_box.z_max.poke(floatToBits(sw_box.z_max))
+  //   }
+  // }
 
-  // Whereas method poke(...) is called, expecting a RayBoxPair as argument,
-  // instead sees a SW_Ray and a SW_Box as arguments, this implicit conversion
-  // will be made.
-  implicit class TestableRayBoxPair(dut_ray_box_pair: baseline_datapath.RayBoxPair) {
-    def poke(sw_ray: SW_Ray, sw_box : SW_Box) : Unit = {
-      dut_ray_box_pair.ray.poke(sw_ray)
-      dut_ray_box_pair.aabb.poke(sw_box)
-    }
-  }
+  // // Whereas method poke(...) is called, expecting a RayBoxPair as argument,
+  // // instead sees a SW_Ray and a SW_Box as arguments, this implicit conversion
+  // // will be made.
+  // implicit class TestableRayBoxPair(dut_ray_box_pair: baseline_datapath.RayBoxPair) {
+  //   def poke(sw_ray: SW_Ray, sw_box : SW_Box) : Unit = {
+  //     dut_ray_box_pair.ray.poke(sw_ray)
+  //     dut_ray_box_pair.aabb.poke(sw_box)
+  //   }
+  // }
 
   // implicit class TestableRayBoxTriangleBundle(dut_combined_port: baseline_datapath.CombinedRayBoxTriangleBundle) {
   //   def poke(s: SW_CombinedData) : Unit = {
@@ -228,7 +240,6 @@ object RaytracerTestHelper {
           _.z_min -> floatToBits(sw_box(3).z_min),
           _.z_max -> floatToBits(sw_box(3).z_max),
         ),
-      // ignore other three boxes
     )
   }
 
@@ -300,6 +311,7 @@ object RaytracerGold {
     val box_index: Seq[Int]
   )
 
+  // Non-intersections are marked as PositiveInfinity
   def testIntersection(ray: SW_Ray, box_seq: Seq[SW_Box]): SW_RayBox_Result = {
     val four_results: Seq[Option[Float]] = box_seq.map(testIntersection(ray, _))
 

@@ -5,8 +5,10 @@ import chiseltest._
 import org.scalatest.freespec.AnyFreeSpec
 import scala.util.Random
 import scala.math._
+import scala.collection.mutable.BitSet
 import chiseltest.experimental.expose
 import chisel3.experimental.BundleLiterals._
+import chisel3.experimental.VecLiterals._
 
 import baseline_datapath.raytracer_gold._
 import baseline_datapath.raytracer_gold.RaytracerTestHelper._ // implicit conversions
@@ -35,7 +37,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   type HW_Box = baseline_datapath.AABB
 
   val r = new Random()
-  val N_RANDOM_TEST = 10000
+  val N_RANDOM_TEST = 10
 
   // Define a function for ray-box intersection testing
   def testRayBoxIntersection(
@@ -68,37 +70,68 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
         // Furhtermore, using `def` instead of `val` allows garbage collection
         // to destroy spent elements ASAP.
 
-        // cartesian product of all boxes and rays
-        def ray_box_list = LazyList.from{
-          for(ray <- ray_seq; box_seq <- box_seq_seq) yield (ray, box_seq)
+        def ray_box_list: LazyList[SW_CombinedData] = LazyList.from{
+          (ray_seq zip box_seq_seq).map{case(r, bs)=>SW_CombinedData(r, bs, false)}
         }
         
         // a sequence of software gold results
         def sw_result_seq : LazyList[RaytracerGold.SW_RayBox_Result] = {
           ray_box_list.map{
-            case(r, bseq) => {
+            case SW_CombinedData(r, bseq, _) => {
               // println("calculated a sw result")
               RaytracerGold.testIntersection(r, bseq)
             }
           }
         }
 
-        sw_result_seq.foreach(println(_))
+        fork{
+          // On the one hand, we pipe-in the test case inputs
+          // (our helper method will automatically convert them from SW_Combined
+          // to CombinedRayBoxTriangleBundle).
+          dut.in.enqueueSeq(ray_box_list)
+        }.fork{
+          // On the other hand, we sit at the output side and examing for valid
+          // outputs one-by-one. 
+          // Because non-intersects have unspecified order, the software result
+          // may have different order than the actual hw output. Hence the for
+          // loop. 
+          sw_result_seq.foreach{sw_r => 
+            dut.out.waitForValid()
+            
+            // val o = dut.out.bits.peek()
+            //   println(s"actual tmin: ${o.tmin_out.map(bitsToFloat(_))}")
+            //   println(s"actual intersect: ${o.isIntersect.map(_.litValue)}")
+            //   println(s"actual boxidx: ${o.boxIndex.map(_.litValue)}")
+            // println(s"Predicted: ${sw_r}")
 
-        // hardware-format result, of the type 
-        // Bundle{val tmin_out: Bits, val isIntersect: Bool}
-        // def expectedResult = sw_result_seq.map{x => 
-        //   chiselTypeOf(dut.out.bits).Lit(
-        //     _.tmin_out -> x.map(floatToBits(_)).getOrElse(floatToBits(-1.0f)),
-        //     _.isIntersect -> x.nonEmpty.B
-        //   )
-        // }
+            // a mutable BitSet tracks which input-box does not intersect
+            val predicted_non_intersect_boxes = new collection.mutable.BitSet(4)
 
-        // fork{
-        //   dut.in.enqueueSeq(ray_box_list)
-        // }.fork{
-        //   dut.out.expectDequeueSeq(expectedResult)
-        // }.join()
+            //This part checks for boxes the SW predict to intersect
+            for(idx <- 0 until 4){
+              if(sw_r.is_intersect(idx)){
+                dut.out.bits.isIntersect(idx).expect(sw_r.is_intersect(idx).B)
+                dut.out.bits.boxIndex(idx).expect((sw_r.box_index(idx).U))
+                dut.out.bits.tmin_out(idx).expect(floatToBits(sw_r.t_min(idx)))
+              }
+              else{
+                predicted_non_intersect_boxes.add(sw_r.box_index(idx))
+              }
+            }
+            // This part checks for boxes the SW predict to not intersect
+            for(idx <- 0 until 4){
+              val box_idx: Int = dut.out.bits.boxIndex(idx).peek().litValue.intValue
+              if(dut.out.bits.isIntersect(idx).peek().litToBoolean){
+                assert(!predicted_non_intersect_boxes.contains(box_idx))
+              }
+              else{
+                assert(predicted_non_intersect_boxes.contains(box_idx))
+              }
+            }
+
+            dut.clock.step()
+          }
+        }.join()
 
         println(s"test ends at time ${dut.exposed_time.peek().litValue}")
       }
@@ -159,9 +192,9 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     new SW_Ray(float_3(1.0f, 2.0f, 1.0f), float_3(0.0f, -1.0f, 0.0f)) :: Nil
   )
 
-  // testRayBoxIntersection(
-  //   s"${N_RANDOM_TEST} randomized rays and boxes within range -10000.0, 10000.0",
-  //   List.fill(math.sqrt(N_RANDOM_TEST).toInt){RaytracerGold.genRandomBox(10000)},
-  //   List.fill(math.sqrt(N_RANDOM_TEST).toInt){RaytracerGold.genRandomRay(10000)}
-  // )
+  testRayBoxIntersection(
+    s"${N_RANDOM_TEST} randomized rays and boxes within range -10000.0, 10000.0",
+    List.fill(N_RANDOM_TEST){List.fill(4){RaytracerGold.genRandomBox(10000)}},
+    List.fill(N_RANDOM_TEST){RaytracerGold.genRandomRay(10000)}
+  )
 }
