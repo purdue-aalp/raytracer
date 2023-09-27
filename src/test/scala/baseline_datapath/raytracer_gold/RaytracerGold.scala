@@ -158,7 +158,7 @@ object RaytracerTestHelper {
   implicit def fromSWRayAndSWBoxToRayBoxPair(rb: (SW_Ray, SW_Box)): RayBoxPair = {
     import chisel3.experimental.BundleLiterals._
     val (sw_ray, sw_box) = rb
-    val dummy_rmp = new RayBoxPair(false)
+    lazy val dummy_rmp = new RayBoxPair(false)
     dummy_rmp.Lit(
       _.ray.origin.x -> floatToBits(sw_ray.origin.x),
       _.ray.origin.y -> floatToBits(sw_ray.origin.y),
@@ -190,7 +190,8 @@ object RaytracerTestHelper {
     val op = rb.isTriangleOp 
     assert(sw_box.length == 4)
 
-    val dummy_crbtb = new CombinedRayBoxTriangleBundle(false)
+    lazy val dummy_crbtb = new CombinedRayBoxTriangleBundle(false)
+    lazy val dummy_aabb = new AABB(false)
 
     dummy_crbtb.Lit(
       _.isTriangleOp -> op.B,
@@ -205,7 +206,7 @@ object RaytracerTestHelper {
       _.ray.inv.z -> floatToBits(sw_ray.inv.z),
       _.ray.extent -> floatToBits(sw_ray.extent),
       _.aabb(0) -> 
-        new AABB(false).Lit(
+        dummy_aabb.Lit(
           _.x_min -> floatToBits(sw_box(0).x_min),
           _.x_max -> floatToBits(sw_box(0).x_max),
           _.y_min -> floatToBits(sw_box(0).y_min),
@@ -214,7 +215,7 @@ object RaytracerTestHelper {
           _.z_max -> floatToBits(sw_box(0).z_max),
         ),
       _.aabb(1) -> 
-        new AABB(false).Lit(
+        dummy_aabb.Lit(
           _.x_min -> floatToBits(sw_box(1).x_min),
           _.x_max -> floatToBits(sw_box(1).x_max),
           _.y_min -> floatToBits(sw_box(1).y_min),
@@ -223,7 +224,7 @@ object RaytracerTestHelper {
           _.z_max -> floatToBits(sw_box(1).z_max),
         ),
       _.aabb(2) -> 
-        new AABB(false).Lit(
+        dummy_aabb.Lit(
           _.x_min -> floatToBits(sw_box(2).x_min),
           _.x_max -> floatToBits(sw_box(2).x_max),
           _.y_min -> floatToBits(sw_box(2).y_min),
@@ -232,7 +233,7 @@ object RaytracerTestHelper {
           _.z_max -> floatToBits(sw_box(2).z_max),
         ),
       _.aabb(3) -> 
-        new AABB(false).Lit(
+        dummy_aabb.Lit(
           _.x_min -> floatToBits(sw_box(3).x_min),
           _.x_max -> floatToBits(sw_box(3).x_max),
           _.y_min -> floatToBits(sw_box(3).y_min),

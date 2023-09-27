@@ -55,7 +55,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
           // WriteVcdAnnotation,
           VerilatorCFlags(Seq("-O3", "-march=native")),
           VerilatorLinkFlags(Seq("-O3", "-march=native")),
-          VerilatorFlags(Seq("--threads","2")),
+          VerilatorFlags(Seq("-O3", "--threads","4")),
         )
       ).withChiselAnnotations(
         Seq(
@@ -97,9 +97,6 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
           // may have different order than the actual hw output. Hence the for
           // loop. 
           sw_result_seq.zipWithIndex.foreach{case(sw_r, input_no) => 
-            if(input_no % 10000 == 0){
-              println(f"input #${input_no}")
-            }
             dut.out.waitForValid()
 
             // val o = dut.out.bits.peek()
@@ -116,6 +113,10 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
             // traverse the four elements of actual output, verify their
             // ordering is correct, and they match with what the software gold
             // result predicts
+            lazy val o = dut.out.bits.peek()
+            def error_string = {
+              s"input #${input_no}\nactual tmin: ${o.tmin_out.map(bitsToFloat(_))}\n" + s"actual intersect: ${o.isIntersect.map(_.litValue)}\n" +  s"actual boxidx: ${o.boxIndex.map(_.litValue)}\n" + s"Predicted: ${sw_r}"
+            }
             var has_seen_non_intersect = false
             var so_far_largest_tmin = 0.0f
             for(idx <- 0 until 4){
@@ -123,24 +124,19 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
               val actual_is_intersect = dut.out.bits.isIntersect(idx).peek().litToBoolean
               val actual_box_idx = dut.out.bits.boxIndex(idx).peek().litValue.intValue
 
-              lazy val o = dut.out.bits.peek()
-              def error_string = {
-                //println("evaluates error string!")
-                s"input #${input_no}\nactual tmin: ${o.tmin_out.map(bitsToFloat(_))}\n" + s"actual intersect: ${o.isIntersect.map(_.litValue)}\n" +  s"actual boxidx: ${o.boxIndex.map(_.litValue)}\n" + s"Predicted: ${sw_r}"
-              }
-
-              // check t value monotonicity
-              assert(actual_tmin >= so_far_largest_tmin, error_string)
+              // check t value monotonicity (use scala.Predef.assert instead of
+              // scalatest.assert so we can call error_string by-name)
+              Predef.assert(actual_tmin >= so_far_largest_tmin, error_string)
 
               // check intersects go before non-intersects
-              assert(!has_seen_non_intersect || (has_seen_non_intersect && !actual_is_intersect), error_string)
+              Predef.assert(!has_seen_non_intersect || (has_seen_non_intersect && !actual_is_intersect), error_string)
 
               // check HW and SW yields the same intersect t value for each box
-              assert(input_box_status(actual_box_idx)._1 == actual_tmin, error_string)
+              Predef.assert(input_box_status(actual_box_idx)._1 == actual_tmin, error_string)
 
               // checkout HW and SW yields the same opinion on intersection
-              assert(input_box_status(actual_box_idx)._2 == actual_is_intersect, error_string)
-              
+              Predef.assert(input_box_status(actual_box_idx)._2 == actual_is_intersect, error_string)
+
               if(!has_seen_non_intersect && !actual_is_intersect){
                 has_seen_non_intersect = true
               }
@@ -188,62 +184,62 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   }
 
   // Define test cases
-  // testRayBoxIntersection(
-  //   "Small Ray inside box",
-  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
-  //   new SW_Ray(float_3(0.5f, -0.5f, 0.5f), float_3(0.0001f, -0.0001f, -0.001f)) :: Nil
-  // )
-  // testRayBoxIntersection(
-  //   "Ray outside box pointing away",
-  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
-  //   new SW_Ray(float_3(2.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
-  // )
-  // testRayBoxIntersection(
-  //   "Ray on edge of box pointing away",
-  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
-  //   new SW_Ray(float_3(1.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
-  // )
-  // testRayBoxIntersection(
-  //   "Ray on corner of box pointing away",
-  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
-  //   new SW_Ray(float_3(1.0f, 1.0f, 1.0f), float_3(1.0f, 1.0f, 1.0f)) :: Nil
-  // )
-  // testRayBoxIntersection(
-  //   "Ray on corner of box pointing along edge",
-  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
-  //   new SW_Ray(float_3(1.0f, 1.0f, 1.0f), float_3(0.0f, -1.0f, 0.0f)) :: Nil
-  // )
-  // testRayBoxIntersection(
-  //   "Ray outside box pointing towards box",
-  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
-  //   new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
-  // )
-  // testRayBoxIntersection(
-  //   "Ray hits node 1 then node 2",
-  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) ::
-  //     SW_Box(2.0f, 2.5f, -0.5f, 0.5f, -0.5f, 0.5f) :: SW_Box():: SW_Box()::Nil)::Nil,
-  //   new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(10.0f, 0.0f, 0.0f)) :: Nil
-  // )
+  testRayBoxIntersection(
+    "Small Ray inside box",
+    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
+    new SW_Ray(float_3(0.5f, -0.5f, 0.5f), float_3(0.0001f, -0.0001f, -0.001f)) :: Nil
+  )
+  testRayBoxIntersection(
+    "Ray outside box pointing away",
+    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
+    new SW_Ray(float_3(2.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
+  )
+  testRayBoxIntersection(
+    "Ray on edge of box pointing away",
+    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
+    new SW_Ray(float_3(1.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
+  )
+  testRayBoxIntersection(
+    "Ray on corner of box pointing away",
+    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
+    new SW_Ray(float_3(1.0f, 1.0f, 1.0f), float_3(1.0f, 1.0f, 1.0f)) :: Nil
+  )
+  testRayBoxIntersection(
+    "Ray on corner of box pointing along edge",
+    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
+    new SW_Ray(float_3(1.0f, 1.0f, 1.0f), float_3(0.0f, -1.0f, 0.0f)) :: Nil
+  )
+  testRayBoxIntersection(
+    "Ray outside box pointing towards box",
+    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
+    new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
+  )
+  testRayBoxIntersection(
+    "Ray hits node 1 then node 2",
+    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) ::
+      SW_Box(2.0f, 2.5f, -0.5f, 0.5f, -0.5f, 0.5f) :: SW_Box():: SW_Box()::Nil)::Nil,
+    new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(10.0f, 0.0f, 0.0f)) :: Nil
+  )
 
-  // testRayBoxIntersection(
-  //   "Ray hits node 4 then 1 then 2 then misses 3",
-  //   (SW_Box(2.0f, 2.5f, -0.5f, 0.5f, -0.5f, 0.5f) ::
-  //     SW_Box(100.0f, 100.25f, -0.5f, 0.5f, -0.5f, 0.5f) ::
-  //     SW_Box(-5.0f, -4.0f, -0.5f, 0.5f, -0.5f, 0.5f) ::
-  //       SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) ::
-  //      Nil)::Nil,
-  //   new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(10.0f, 0.0f, 0.0f)) :: Nil
-  // )
+  testRayBoxIntersection(
+    "Ray hits node 4 then 1 then 2 then misses 3",
+    (SW_Box(2.0f, 2.5f, -0.5f, 0.5f, -0.5f, 0.5f) ::
+      SW_Box(100.0f, 100.25f, -0.5f, 0.5f, -0.5f, 0.5f) ::
+      SW_Box(-5.0f, -4.0f, -0.5f, 0.5f, -0.5f, 0.5f) ::
+        SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) ::
+       Nil)::Nil,
+    new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(10.0f, 0.0f, 0.0f)) :: Nil
+  )
 
-  // testRayBoxIntersection(
-  //   "Ray outside box pointing along edge",
-  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
-  //   new SW_Ray(float_3(1.0f, 2.0f, 1.0f), float_3(0.0f, -1.0f, 0.0f)) :: Nil
-  // )
+  testRayBoxIntersection(
+    "Ray outside box pointing along edge",
+    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
+    new SW_Ray(float_3(1.0f, 2.0f, 1.0f), float_3(0.0f, -1.0f, 0.0f)) :: Nil
+  )
 
   testRayBoxIntersection(
     s"${N_RANDOM_TEST} randomized rays and boxes within range -10000.0, 10000.0",
-    List.fill(N_RANDOM_TEST){List.fill(4){RaytracerGold.genRandomBox(10000)}},
-    List.fill(N_RANDOM_TEST){RaytracerGold.genRandomRay(10000)}
+    List.fill(N_RANDOM_TEST){List.fill(4){RaytracerGold.genRandomBox(1e16.toFloat)}},
+    List.fill(N_RANDOM_TEST){RaytracerGold.genRandomRay(1e5.toFloat)}
   )
 }
