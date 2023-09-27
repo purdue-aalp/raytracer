@@ -86,7 +86,7 @@ class ValExec_QuadSortRecFNWithIndex extends Module {
 
 class QuadSortRecFNTest extends AnyFreeSpec with ChiselScalatestTester {
   val r = new Random()
-  val N_TEST = 150
+  val N_TEST = 100000
   "value sorter correctly sort four floats" in {
     test(new ValExec_QuadSortRecFN()).withAnnotations(
       Seq(VerilatorBackendAnnotation)

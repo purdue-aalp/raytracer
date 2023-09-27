@@ -27,7 +27,7 @@ class CompareAndSwapRecFN extends Module {
 
   val compare_select_unit = Module(
     new RecFNCompareSelect(
-      option = false,
+      option = true,
       passthrough_type = Bits(33.W)
     )
   )

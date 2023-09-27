@@ -57,7 +57,7 @@ class QuadSortRecFNWithIndex extends Module {
   cas_sequence.zipWithIndex // (pair_0, 0), (pair_1, 1), ...
     .foreach { case ((cas_0, cas_1), input_stage_idx) =>
       /* Sort the indices */
-      val index_unit = Module(new RecFNCompareSelect(false, Bits(35.W)))
+      val index_unit = Module(new RecFNCompareSelect(true, Bits(35.W)))
       index_unit.io.a := echelons(input_stage_idx).stage_elements(cas_0)
       index_unit.io.b := echelons(input_stage_idx).stage_elements(cas_1)
       index_unit.io.c := echelons(input_stage_idx).shuffled_indices(

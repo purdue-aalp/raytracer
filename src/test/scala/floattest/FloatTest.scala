@@ -17,9 +17,9 @@ class FloatTestSpec extends AnyFreeSpec with ChiselScalatestTester {
         val bb: ByteBuffer = ByteBuffer.allocate(4)
         bb.putInt(x.litValue.intValue)
         val f = bb.rewind().getFloat()
-        println(
-          s"ready: ${dut.io.out_valid.peek().litToBoolean}, output: ${x.litValue}, converted: ${f}"
-        )
+        // println(
+        //   s"ready: ${dut.io.out_valid.peek().litToBoolean}, output: ${x.litValue}, converted: ${f}"
+        // )
 
         dut.clock.step()
       }
