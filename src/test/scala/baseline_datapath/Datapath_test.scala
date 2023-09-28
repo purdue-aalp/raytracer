@@ -113,10 +113,11 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
             // traverse the four elements of actual output, verify their
             // ordering is correct, and they match with what the software gold
             // result predicts
-            lazy val o = dut.out.bits.peek()
-            def error_string = {
-              s"input #${input_no}\nactual tmin: ${o.tmin_out.map(bitsToFloat(_))}\n" + s"actual intersect: ${o.isIntersect.map(_.litValue)}\n" +  s"actual boxidx: ${o.boxIndex.map(_.litValue)}\n" + s"Predicted: ${sw_r}"
+            val error_string_obj = new AnyRef {
+              lazy val o = dut.out.bits.peek()
+              override def toString : String = {s"input #${input_no}\nactual tmin: ${o.tmin_out.map(bitsToFloat(_))}\n" + s"actual intersect: ${o.isIntersect.map(_.litValue)}\n" +  s"actual boxidx: ${o.boxIndex.map(_.litValue)}\n" + s"Predicted: ${sw_r}"}
             }
+
             var has_seen_non_intersect = false
             var so_far_largest_tmin = 0.0f
             for(idx <- 0 until 4){
@@ -126,16 +127,16 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
               // check t value monotonicity (use scala.Predef.assert instead of
               // scalatest.assert so we can call error_string by-name)
-              Predef.assert(actual_tmin >= so_far_largest_tmin, error_string)
+              assert(actual_tmin >= so_far_largest_tmin, error_string_obj)
 
               // check intersects go before non-intersects
-              Predef.assert(!has_seen_non_intersect || (has_seen_non_intersect && !actual_is_intersect), error_string)
+              assert(!has_seen_non_intersect || (has_seen_non_intersect && !actual_is_intersect), error_string_obj)
 
               // check HW and SW yields the same intersect t value for each box
-              Predef.assert(input_box_status(actual_box_idx)._1 == actual_tmin, error_string)
+              assert(input_box_status(actual_box_idx)._1 == actual_tmin, error_string_obj)
 
               // checkout HW and SW yields the same opinion on intersection
-              Predef.assert(input_box_status(actual_box_idx)._2 == actual_is_intersect, error_string)
+              assert(input_box_status(actual_box_idx)._2 == actual_is_intersect, error_string_obj)
 
               if(!has_seen_non_intersect && !actual_is_intersect){
                 has_seen_non_intersect = true
