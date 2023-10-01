@@ -133,9 +133,16 @@ case class SW_Box(
     val z_max: Float = Float.PositiveInfinity
 )
 
+case class SW_Triangle(
+  val A: float_3 = float_3(0.0f, 0.0f, 0.0f),
+  val B: float_3 = float_3(0.0f, 0.0f, 0.0f), 
+  val C: float_3 = float_3(0.0f, 0.0f, 0.0f)
+)
+
 case class SW_CombinedData(
   val ray: SW_Ray ,
   val boxes: Seq[SW_Box],
+  val triangle: SW_Triangle,
   val isTriangleOp: Boolean
 )
 
@@ -237,6 +244,7 @@ object RaytracerTestHelper {
     import chisel3.experimental.BundleLiterals._
     val sw_ray= rb.ray
     val sw_box = rb.boxes
+    val sw_triangle = rb.triangle
     val op = rb.isTriangleOp 
     assert(sw_box.length == 4)
 
@@ -261,6 +269,15 @@ object RaytracerTestHelper {
       _.ray.shear.x -> floatToBits(sw_ray.shear.x),
       _.ray.shear.y -> floatToBits(sw_ray.shear.y),
       _.ray.shear.z -> floatToBits(sw_ray.shear.z),
+      _.triangle.A.x -> floatToBits(sw_triangle.A.x),
+      _.triangle.A.y -> floatToBits(sw_triangle.A.y),
+      _.triangle.A.z -> floatToBits(sw_triangle.A.z),
+      _.triangle.B.x -> floatToBits(sw_triangle.B.x),
+      _.triangle.B.y -> floatToBits(sw_triangle.B.y),
+      _.triangle.B.z -> floatToBits(sw_triangle.B.z),
+      _.triangle.C.x -> floatToBits(sw_triangle.C.x), 
+      _.triangle.C.y -> floatToBits(sw_triangle.C.y),
+      _.triangle.C.z -> floatToBits(sw_triangle.C.z),           
       _.aabb(0) -> 
         dummy_aabb.Lit(
           _.x_min -> floatToBits(sw_box(0).x_min),
