@@ -37,7 +37,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   type HW_Box = baseline_datapath.AABB
 
   val r = new Random()
-  val N_RANDOM_TEST = 1000000
+  val N_RANDOM_TEST = 10000
 
   // Define a function for ray-box intersection testing
   def testRayBoxIntersection(

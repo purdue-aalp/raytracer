@@ -47,12 +47,38 @@ case class float_3(
     val x: Float,
     val y: Float,
     val z: Float
-)
+){
+  def at(n: Int): Float = n match {
+    case 0 => x 
+    case 1 => y 
+    case 2 => z 
+    case _ => throw new Exception("Float only has 0, 1, 2 three dimensions")
+  }
+}
 
 class SW_Ray(
     val origin: float_3,
     val dir: float_3
 ) {
+  def max_dim(): Int = {
+    val x: Float = math.abs(dir.x)
+    val y: Float = math.abs(dir.y)
+    val z: Float = math.abs(dir.z)
+
+    var maxInd = 0 
+    var maxVal = x
+
+    if(y > maxVal){
+      maxVal = y
+      maxInd = 1 
+    }
+    if(z > maxVal){
+      maxInd = 2
+    }
+
+    maxInd
+  }
+
   val extent: Float = SW_Ray.RAY_EXTENT.toFloat
   val inv: float_3 = {
     val _x = 1.0f / dir.x
@@ -61,6 +87,24 @@ class SW_Ray(
     val _inv = float_3(_x, _y, _z)
     _inv
   }
+  
+  val (kx, ky, kz): (Int, Int, Int) = {
+    var _kz = max_dim()
+    var _kx = if(_kz+1==3){0}else{_kz+1}
+    var _ky = if(_kx+1==3){0}else{_kx+1}
+    if(dir.at(_kz) < 0.0f){
+      val temp = _kx 
+      _kx = _ky 
+      _ky = temp
+    }
+    (_kx, _ky, _kz)
+  }
+  
+  val shear = float_3(
+    x = dir.at(kx) / dir.at(kz),
+    y = dir.at(ky) / dir.at(kz),
+    z = 1.0f / dir.at(kz)
+  )
 }
 
 object SW_Ray {
@@ -170,6 +214,12 @@ object RaytracerTestHelper {
       _.ray.inv.y -> floatToBits(sw_ray.inv.y),
       _.ray.inv.z -> floatToBits(sw_ray.inv.z),
       _.ray.extent -> floatToBits(sw_ray.extent),
+      _.ray.kx -> sw_ray.kx.U,
+      _.ray.ky -> sw_ray.ky.U,
+      _.ray.kz -> sw_ray.kz.U,
+      _.ray.shear.x -> floatToBits(sw_ray.shear.x),
+      _.ray.shear.y -> floatToBits(sw_ray.shear.y),
+      _.ray.shear.z -> floatToBits(sw_ray.shear.z),
       _.aabb.x_min -> floatToBits(sw_box.x_min),
       _.aabb.x_max -> floatToBits(sw_box.x_max),
       _.aabb.y_min -> floatToBits(sw_box.y_min),
@@ -205,6 +255,12 @@ object RaytracerTestHelper {
       _.ray.inv.y -> floatToBits(sw_ray.inv.y),
       _.ray.inv.z -> floatToBits(sw_ray.inv.z),
       _.ray.extent -> floatToBits(sw_ray.extent),
+      _.ray.kx -> sw_ray.kx.U,
+      _.ray.ky -> sw_ray.ky.U,
+      _.ray.kz -> sw_ray.kz.U,
+      _.ray.shear.x -> floatToBits(sw_ray.shear.x),
+      _.ray.shear.y -> floatToBits(sw_ray.shear.y),
+      _.ray.shear.z -> floatToBits(sw_ray.shear.z),
       _.aabb(0) -> 
         dummy_aabb.Lit(
           _.x_min -> floatToBits(sw_box(0).x_min),

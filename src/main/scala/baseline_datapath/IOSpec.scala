@@ -31,6 +31,11 @@ class Ray(recorded_float: Boolean = false) extends Bundle {
   val _bit_width = if (recorded_float) 33.W else 32.W
   val extent = Bits(_bit_width)
 
+  val kx = UInt(2.W)
+  val ky = UInt(2.W)
+  val kz = UInt(2.W)
+  val shear = new Float3(recorded_float)
+
   def isRecordedFloat(): Boolean = { recorded_float }
 }
 
@@ -109,6 +114,12 @@ object RayConvertFNtoRecFN {
     out.inv.y := recFNFromFN(8, 24, in.inv.y)
     out.inv.z := recFNFromFN(8, 24, in.inv.z)
     out.extent := recFNFromFN(8, 24, in.extent)
+    out.kx := in.kx 
+    out.ky := in.ky 
+    out.kz := in.kz 
+    out.shear.x := recFNFromFN(8, 24, in.shear.x)
+    out.shear.y := recFNFromFN(8, 24, in.shear.y)
+    out.shear.z := recFNFromFN(8, 24, in.shear.z)
 
     out
   }
@@ -133,6 +144,12 @@ object RayConvertRecFNtoFN {
     out.inv.y := fNFromRecFN(8, 24, in.inv.y)
     out.inv.z := fNFromRecFN(8, 24, in.inv.z)
     out.extent := fNFromRecFN(8, 24, in.extent)
+    out.kx := in.kx 
+    out.ky := in.ky 
+    out.kz := in.kz 
+    out.shear.x := fNFromRecFN(8, 24, in.shear.x)
+    out.shear.y := fNFromRecFN(8, 24, in.shear.y)
+    out.shear.z := fNFromRecFN(8, 24, in.shear.z)
 
     out
   }
