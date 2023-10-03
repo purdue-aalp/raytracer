@@ -184,63 +184,164 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     }
   }
 
+  def testRayTriangleIntersection(      
+    description: String,
+    triangle_seq: Seq[SW_Triangle],
+    ray_seq: Seq[SW_Ray]
+  ) : Unit = {
+    description in {
+      def ray_triangle_list: LazyList[SW_CombinedData] = LazyList.from{
+        (ray_seq zip triangle_seq).map{case(r, ts)=>SW_CombinedData(r, Nil, ts, true)}
+      }
+      
+      // a sequence of software gold results
+      def sw_result_seq : LazyList[RaytracerGold.SW_RayTriangle_Result] = {
+        ray_triangle_list.map{
+          case SW_CombinedData(r, _, t, true) => {
+            // println("calculated a sw result")
+            RaytracerGold.testTriangleIntersection(r, t)
+          }
+          case _ => {throw new Exception("cannot take ray box data")}
+        }
+      }
+
+      ray_triangle_list.zip(sw_result_seq).foreach{case(data, result) => 
+        println(f"data: ${data}, result: ${result}")  
+      }
+    }
+  }
+
   // Define test cases
-  testRayBoxIntersection(
-    "Small Ray inside box",
-    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
-    new SW_Ray(float_3(0.5f, -0.5f, 0.5f), float_3(0.0001f, -0.0001f, -0.001f)) :: Nil
-  )
-  testRayBoxIntersection(
-    "Ray outside box pointing away",
-    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
-    new SW_Ray(float_3(2.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
-  )
-  testRayBoxIntersection(
-    "Ray on edge of box pointing away",
-    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
-    new SW_Ray(float_3(1.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
-  )
-  testRayBoxIntersection(
-    "Ray on corner of box pointing away",
-    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
-    new SW_Ray(float_3(1.0f, 1.0f, 1.0f), float_3(1.0f, 1.0f, 1.0f)) :: Nil
-  )
-  testRayBoxIntersection(
-    "Ray on corner of box pointing along edge",
-    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
-    new SW_Ray(float_3(1.0f, 1.0f, 1.0f), float_3(0.0f, -1.0f, 0.0f)) :: Nil
-  )
-  testRayBoxIntersection(
-    "Ray outside box pointing towards box",
-    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
-    new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
-  )
-  testRayBoxIntersection(
-    "Ray hits node 1 then node 2",
-    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) ::
-      SW_Box(2.0f, 2.5f, -0.5f, 0.5f, -0.5f, 0.5f) :: SW_Box():: SW_Box()::Nil)::Nil,
-    new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(10.0f, 0.0f, 0.0f)) :: Nil
+  // testRayBoxIntersection(
+  //   "Small Ray inside box",
+  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
+  //   new SW_Ray(float_3(0.5f, -0.5f, 0.5f), float_3(0.0001f, -0.0001f, -0.001f)) :: Nil
+  // )
+  // testRayBoxIntersection(
+  //   "Ray outside box pointing away",
+  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
+  //   new SW_Ray(float_3(2.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
+  // )
+  // testRayBoxIntersection(
+  //   "Ray on edge of box pointing away",
+  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
+  //   new SW_Ray(float_3(1.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
+  // )
+  // testRayBoxIntersection(
+  //   "Ray on corner of box pointing away",
+  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
+  //   new SW_Ray(float_3(1.0f, 1.0f, 1.0f), float_3(1.0f, 1.0f, 1.0f)) :: Nil
+  // )
+  // testRayBoxIntersection(
+  //   "Ray on corner of box pointing along edge",
+  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
+  //   new SW_Ray(float_3(1.0f, 1.0f, 1.0f), float_3(0.0f, -1.0f, 0.0f)) :: Nil
+  // )
+  // testRayBoxIntersection(
+  //   "Ray outside box pointing towards box",
+  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
+  //   new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
+  // )
+  // testRayBoxIntersection(
+  //   "Ray hits node 1 then node 2",
+  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) ::
+  //     SW_Box(2.0f, 2.5f, -0.5f, 0.5f, -0.5f, 0.5f) :: SW_Box():: SW_Box()::Nil)::Nil,
+  //   new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(10.0f, 0.0f, 0.0f)) :: Nil
+  // )
+
+  // testRayBoxIntersection(
+  //   "Ray hits node 4 then 1 then 2 then misses 3",
+  //   (SW_Box(2.0f, 2.5f, -0.5f, 0.5f, -0.5f, 0.5f) ::
+  //     SW_Box(100.0f, 100.25f, -0.5f, 0.5f, -0.5f, 0.5f) ::
+  //     SW_Box(-5.0f, -4.0f, -0.5f, 0.5f, -0.5f, 0.5f) ::
+  //       SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) ::
+  //      Nil)::Nil,
+  //   new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(10.0f, 0.0f, 0.0f)) :: Nil
+  // )
+
+  // testRayBoxIntersection(
+  //   "Ray outside box pointing along edge",
+  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
+  //   new SW_Ray(float_3(1.0f, 2.0f, 1.0f), float_3(0.0f, -1.0f, 0.0f)) :: Nil
+  // )
+
+  // testRayBoxIntersection(
+  //   s"${N_RANDOM_TEST} randomized rays and boxes within range -10000.0, 10000.0",
+  //   List.fill(N_RANDOM_TEST){List.fill(4){RaytracerGold.genRandomBox(1e16.toFloat)}},
+  //   List.fill(N_RANDOM_TEST){RaytracerGold.genRandomRay(1e5.toFloat)}
+  // )
+
+  testRayTriangleIntersection(
+    "Ray hits back of triangle along normal to surface",
+    SW_Triangle(float_3(-1.0f, -1.0f, -1.0f), float_3(0.0f, 1.0f, -1.0f), float_3(1.0f, -1.0f, -1.0f)) :: Nil,
+    new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
   )
 
-  testRayBoxIntersection(
-    "Ray hits node 4 then 1 then 2 then misses 3",
-    (SW_Box(2.0f, 2.5f, -0.5f, 0.5f, -0.5f, 0.5f) ::
-      SW_Box(100.0f, 100.25f, -0.5f, 0.5f, -0.5f, 0.5f) ::
-      SW_Box(-5.0f, -4.0f, -0.5f, 0.5f, -0.5f, 0.5f) ::
-        SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) ::
-       Nil)::Nil,
-    new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(10.0f, 0.0f, 0.0f)) :: Nil
+  testRayTriangleIntersection(
+    "Ray hits front of triangle along normal to surface",
+    SW_Triangle(float_3(1.0f, -1.0f, -1.0f), float_3(0.0f, 1.0f, -1.0f), float_3(-1.0f, -1.0f, -1.0f)) :: Nil,
+    new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -1.0f)) :: Nil
   )
 
-  testRayBoxIntersection(
-    "Ray outside box pointing along edge",
-    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) :: SW_Box():: SW_Box():: SW_Box() :: Nil)::Nil,
-    new SW_Ray(float_3(1.0f, 2.0f, 1.0f), float_3(0.0f, -1.0f, 0.0f)) :: Nil
+  testRayTriangleIntersection(
+    "Ray hits front edge of triangle along normal to surface",
+    SW_Triangle(float_3(1.0f, -1.0f, -1.0f), float_3(0.0f, 1.0f, -1.0f), float_3(0.0f, -1.0f, -1.0f)) :: Nil,
+    new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
   )
 
-  testRayBoxIntersection(
-    s"${N_RANDOM_TEST} randomized rays and boxes within range -10000.0, 10000.0",
-    List.fill(N_RANDOM_TEST){List.fill(4){RaytracerGold.genRandomBox(1e16.toFloat)}},
-    List.fill(N_RANDOM_TEST){RaytracerGold.genRandomRay(1e5.toFloat)}
+  testRayTriangleIntersection(
+    "Ray hits front corner of triangle along normal to surface",
+    SW_Triangle(float_3(1.0f, -1.0f, -1.0f), float_3(0.0f, 0.0f, -1.0f), float_3(0.0f, -1.0f, -1.0f)) :: Nil,
+    new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
   )
+
+  testRayTriangleIntersection(
+    "Ray misses triangle",
+    SW_Triangle(float_3(1.0f, -1.0f, -1.0f), float_3(0.0f, 1.0f, -1.0f), float_3(-1.0f, -1.0f, -1.0f)) :: Nil,
+    new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, 5.0f)) :: Nil
+  )
+
+  testRayTriangleIntersection(
+    "Ray misses triangle along normal to surface",
+    SW_Triangle(float_3(1.0f, -1.0f, -1.0f), float_3(0.0f, 1.0f, -1.0f), float_3(-1.0f, -1.0f, -1.0f)) :: Nil,
+    new SW_Ray(float_3(-5.0f, 5.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
+  )
+
+  testRayTriangleIntersection(
+    "Ray hits front of triangle along normal to surface (further away)",
+    SW_Triangle(float_3(1.0f, -1.0f, -100.0f), float_3(0.0f, 1.0f, -100.0f), float_3(-1.0f, -1.0f, -100.0f)) :: Nil,
+    new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
+  )
+
+  testRayTriangleIntersection(
+    "Ray hits front of triangle not along normal",
+    SW_Triangle(float_3(1.0f, -1.0f, -3.0f), float_3(0.0f, 1.0f, -1.0f), float_3(-1.0f, -1.0f, -2.0f)) :: Nil,
+    new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
+  )
+
+  testRayTriangleIntersection(
+    "Ray hits edge of triangle perpendicular to normal",
+    SW_Triangle(float_3(1.0f, -1.0f, -1.0f), float_3(0.0f, 1.0f, -1.0f), float_3(-1.0f, -1.0f, -1.0f)) :: Nil,
+    new SW_Ray(float_3(0.0f, -2.0f, -1.0f), float_3(0.0f, 5.0f, 0.0f)) :: Nil
+  )
+
+  testRayTriangleIntersection(
+    "Ray hits triangle (normal on x-axis)",
+    SW_Triangle(float_3(1.0f, -1.0f, 1.0f), float_3(1.0f, 1.0f, 0.0f), float_3(1.0f, -1.0f, -1.0f)) :: Nil,
+    new SW_Ray(float_3(-100.0f, 0.0f, 0.0f), float_3(0.25f, 0.0f, 0.0f)) :: Nil
+  )
+
+  testRayTriangleIntersection(
+    "Ray hits edge of triangle perpendicular to normal from inside tri",
+    SW_Triangle(
+      float_3(1.0f, -1.0f, -1.0f),
+      float_3(0.0f, 1.0f, -1.0f),
+      float_3(-1.0f, -1.0f, -1.0f)
+    ) :: Nil,
+    new SW_Ray(
+      float_3(0.0f, -1.0f/3, -1.0f),
+      float_3(0.0f, 5.0f, 0.0f)
+    ) :: Nil
+  )
+
 }

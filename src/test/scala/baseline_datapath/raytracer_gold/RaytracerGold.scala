@@ -406,6 +406,67 @@ object RaytracerGold {
     )
   }
 
+  case class SW_RayTriangle_Result(
+    val t_num: Float = 0.0f,
+    val t_denom: Float = 0.0f,
+    val is_hit: Boolean = false
+  )
+
+  def testTriangleIntersection(ray: SW_Ray, triangle: SW_Triangle): SW_RayTriangle_Result = {
+    lazy val default_result = SW_RayTriangle_Result()
+    var result = default_result
+    
+    val (kx, ky, kz) = (ray.kx, ray.ky, ray.kz)
+    val A = float_3(
+      triangle.A.x - ray.origin.x,
+      triangle.A.y - ray.origin.y,
+      triangle.A.z - ray.origin.z,
+      )
+    val B = float_3(
+      triangle.B.x - ray.origin.x,
+      triangle.B.y - ray.origin.y,
+      triangle.B.z - ray.origin.z,
+      )
+    val C = float_3(
+      triangle.C.x - ray.origin.x,
+      triangle.C.y - ray.origin.y,
+      triangle.C.z - ray.origin.z,
+      )
+
+    val Ax = A.at(kx) - ray.shear.x * A.at(kz)
+    val Ay = A.at(ky) - ray.shear.y * A.at(kz)
+    val Bx = B.at(kx) - ray.shear.x * B.at(kz)
+    val By = B.at(ky) - ray.shear.y * B.at(kz)
+    val Cx = C.at(kx) - ray.shear.x * C.at(kz)
+    val Cy = C.at(ky) - ray.shear.y * C.at(kz)
+
+    val U = Cx * By - Cy * Bx
+    val V = Ax * Cy - Ay * Cx
+    val W = Bx * Ay - By * Ax
+
+    if(U < 0.0f || V < 0.0f || W < 0.0f){
+      // pass
+    } else {
+      result = result.copy(t_denom = U + V + W)
+      if(result.t_denom == 0.0f){
+        //pass
+      } else {
+        val Az = ray.shear.z * A.at(kz)
+        val Bz = ray.shear.z * B.at(kz)
+        val Cz = ray.shear.z * C.at(kz)
+
+        result = result.copy(t_num = U * Az + V * Bz + W * Cz)
+        if(result.t_num < 0.0f){
+          // pass
+        } else {
+          result = result.copy(is_hit = true)
+        }
+      }
+    }
+
+    result
+  }
+
   /**
     * Generate a randomized AABB given the range
     * -range <= x_min, x_max, y_min, y_max, z_min, z_max <= range
