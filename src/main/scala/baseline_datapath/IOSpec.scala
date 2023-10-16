@@ -84,6 +84,32 @@ class CombinedRayBoxTriangleBundle(recorded_float: Boolean = false)
   val isTriangleOp = Bool()
 }
 
+class UnifiedDatapathOutput(recorded_float: Boolean = false) extends Bundle{
+  val _bit_width = if(recorded_float) 33.W else 32.W
+
+  /**
+    * Common
+    */
+  val isTriangleOp = Bool()
+
+  /**
+    * For Ray-Box intersection
+    */
+  // from index-0 to index-3, intersecting boxes goes before non-intersecting
+  // boxes, nearer hits go before further hits.
+  // The tmin_out for non-intersects are PositiveInfinity
+  val tmin_out = Vec(4, Bits(32.W))
+  val isIntersect = Vec(4, Bool())
+  val boxIndex = Vec(4, UInt(2.W))
+
+  /**
+    * For Ray-Triangle intersection
+    */
+  val t_num = Bits(_bit_width)
+  val t_denom = Bits(_bit_width)
+  val hit_status = Bool()
+}
+
 // Nothing more than this bundle needs to be passed between pipeline stages of
 // the Unified raytracer datapath. Obviously, not all fields will be used in
 // every stage. I entrust the several levels of compilers (FIRRTL, Verilator,
