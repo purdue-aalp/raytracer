@@ -105,6 +105,10 @@ class SW_Ray(
     y = dir.at(ky) / dir.at(kz),
     z = 1.0f / dir.at(kz)
   )
+
+  override def toString(): String = {
+    f"${this.getClass().getName()}(origin(${origin.toString()}), dir(${dir.toString()}), kx($kx), ky($ky), kz($kz), shear(${shear.toString()}))"
+  }
 }
 
 object SW_Ray {

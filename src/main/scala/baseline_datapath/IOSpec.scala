@@ -72,6 +72,8 @@ class RayBoxPair(recorded_float: Boolean = false) extends Bundle {
 
 class CombinedRayBoxTriangleBundle(recorded_float: Boolean = false)
     extends Bundle {
+  val _bit_width = if(recorded_float) 33.W else 32.W
+
   val ray = new Ray(recorded_float)
 
   val aabb = Vec(4, new AABB(recorded_float))
@@ -80,6 +82,42 @@ class CombinedRayBoxTriangleBundle(recorded_float: Boolean = false)
   // if true, perform ray-triangle intersection test
   // if false, perform ray-box interesction tests
   val isTriangleOp = Bool()
+}
+
+// Nothing more than this bundle needs to be passed between pipeline stages of
+// the Unified raytracer datapath. Obviously, not all fields will be used in
+// every stage. I entrust the several levels of compilers (FIRRTL, Verilator,
+// proprietary RTL synthesizer) to remove unused signals automatically. 
+class ExtendedPipelineBundle(recorded_float: Boolean) 
+extends CombinedRayBoxTriangleBundle(recorded_float){
+
+  // common and basic: defined in base trait CombinedRayBoxTriangleBundle
+  // val ray = new Ray(recorded_float)
+  // val aabb = Vec(4, new AABB(recorded_float))
+  // val triangle = new Triangle(recorded_float)
+  // val isTriangleOp = Bool()
+
+  // for ray-box intersection tests
+  val t_min = Vec(4, new Float3(recorded_float))
+  val t_max = Vec(4, new Float3(recorded_float))
+  val tmin = Vec(4, Bits(_bit_width))
+  val tmax = Vec(4, Bits(_bit_width)) 
+  val isIntersect = Vec(4, Bool())
+  val boxIndex = Vec(4, UInt(2.W))
+
+  // for ray-triangle intersection tests
+  val A = new Float3(recorded_float)
+  val B = new Float3(recorded_float)
+  val C = new Float3(recorded_float)
+  val U = Bits(_bit_width)
+  val V = Bits(_bit_width)
+  val W = Bits(_bit_width)
+  val U_subtrahend = Bits(_bit_width)
+  val V_subtrahend = Bits(_bit_width)
+  val W_subtrahend = Bits(_bit_width)
+  val t_denom = Bits(_bit_width)
+  val t_num = Bits(_bit_width)
+  val hit_status = Bool()
 }
 
 // Conversion circuits between 32-bit IEEE float and 33-bit recorded float

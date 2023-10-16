@@ -83,7 +83,7 @@ class Datapath extends Module {
   val geometries_shift_reg = Reg(
     Vec(
       _shift_reg_length,
-      new CombinedRayBoxTriangleBundle(recorded_float = true)
+      new ExtendedPipelineBundle(recorded_float = true)
     )
   )
   geometries_shift_reg(0) := 0.U.asTypeOf(
