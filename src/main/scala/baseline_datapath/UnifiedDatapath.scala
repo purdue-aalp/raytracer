@@ -59,8 +59,8 @@ class UnifiedDatapath extends Module {
   // 0x7f800000 is positive inf in 32-bit float
   val _positive_inf_RecFN = recFNFromFN(8, 24, 0x7f800000.U)
 
-  // Define the behavior of each stage as functions. Register their output to
-  // the "converyor belt" shift register.
+  // Define the behavior of each stage as functions. 
+  // Register their output to the "converyor belt" shift register.
   // Synopsys: stage_register(idx) := stage_function(idx)(stage_register(idx-1))
 
   // Each element of this array is an Option, that wraps a function object which
@@ -73,9 +73,59 @@ class UnifiedDatapath extends Module {
   // stage 0 does not exist
   // stage 1 is register input
   // stage 2 is convert float32 to float33
+  // stage 3 performs 24 adds for ray-box, or 9 adds for ray-triangle
+  stage_functions(3) = Some({intake: Valid[ExtendedPipelineBundle] => 
+    val emit = Valid(new ExtendedPipelineBundle(true))
+    when(!intake.valid){
+      emit := 0.U.asTypeOf(emit)
+    }.elsewhen(intake.bits.isTriangleOp){
+      // ray-triangle
+    }.otherwise{
+      // ray-box
+      for (box_idx <- 0 until _box_plurality) {
+        val _dest = Seq(
+          emit.bits.aabb(box_idx).x_min,
+          emit.bits.aabb(box_idx).y_min,
+          emit.bits.aabb(box_idx).z_min,
+          emit.bits.aabb(box_idx).x_max,
+          emit.bits.aabb(box_idx).y_max,
+          emit.bits.aabb(box_idx).z_max
+        )
+        val _src1 = Seq(
+          intake.bits.aabb(box_idx).x_min,
+          intake.bits.aabb(box_idx).y_min,
+          intake.bits.aabb(box_idx).z_min,
+          intake.bits.aabb(box_idx).x_max,
+          intake.bits.aabb(box_idx).y_max,
+          intake.bits.aabb(box_idx).z_max
+        )
+        val _src2 = Seq(
+          intake.bits.ray.origin.x,
+          intake.bits.ray.origin.y,
+          intake.bits.ray.origin.z,
+          intake.bits.ray.origin.x,
+          intake.bits.ray.origin.y,
+          intake.bits.ray.origin.z
+        )
+        (_dest zip _src1 zip _src2) foreach {
+          case ((_1, _2), _3) =>
+            val fu = Module(new AddRecFN(8, 24))
+            fu.io.subOp := true.B
+            fu.io.a := _2
+            fu.io.b := _3
+            fu.io.roundingMode := _rounding_rule
+            fu.io.detectTininess := _tininess_rule
+            _1 := fu.io.out
+          // TODO: handle exception flags!
+        }
+      }
+    }
+    emit.valid := intake.valid
+    emit
+  })
 
   // The all-containing bundle that runs through all stages of the unified
-  // pipeline.
+  // pipeline. This is the conveyor belt between stages. 
   val stage_registers = Reg(
     Vec(_stage_count, Valid(new ExtendedPipelineBundle(recorded_float = true)))
   )
