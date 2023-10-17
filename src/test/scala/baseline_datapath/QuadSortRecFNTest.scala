@@ -106,32 +106,38 @@ class QuadSortRecFNTest extends AnyFreeSpec with ChiselScalatestTester {
   }
 
   "index+value sorter correctly sort four floats" in {
-  test(new ValExec_QuadSortRecFNWithIndex()).withAnnotations(
-    Seq(VerilatorBackendAnnotation)
-  ) { dut =>
-    for (_ <- 0 until N_TEST) {
-      val input_vector = mutable.ArraySeq.tabulate(4)(_ => 1e8f * (r.nextFloat() - 0.5f))
+    test(new ValExec_QuadSortRecFNWithIndex()).withAnnotations(
+      Seq(VerilatorBackendAnnotation)
+    ) { dut =>
+      for (_ <- 0 until N_TEST) {
+        val input_vector =
+          mutable.ArraySeq.tabulate(4)(_ => 1e8f * (r.nextFloat() - 0.5f))
 
-      val ran = r.nextFloat()
-      if(ran < 0.1){
-        val swap_idx_with_inf = r.nextInt(4)
-        input_vector(swap_idx_with_inf) = if(r.nextBoolean()) Float.PositiveInfinity else Float.NegativeInfinity
-      } else if (ran < 0.2){
-        // this can break 
-        //input_vector(r.nextInt(4)) = Float.NaN
+        val ran = r.nextFloat()
+        if (ran < 0.1) {
+          val swap_idx_with_inf = r.nextInt(4)
+          input_vector(swap_idx_with_inf) =
+            if (r.nextBoolean()) Float.PositiveInfinity
+            else Float.NegativeInfinity
+        } else if (ran < 0.2) {
+          // this can break
+          // input_vector(r.nextInt(4)) = Float.NaN
+        }
+
+        val expected_out = input_vector.zipWithIndex
+          .sortWith { case ((left, left_idx), (right, right_idx)) =>
+            left > right
+          }
+          .map(_._2)
+          .toSeq
+
+        pokeVector(dut.in, input_vector.toSeq.map(floatToBits(_)))
+        pokeVector(dut.expected_out, expected_out.map(_.asUInt(2.W)))
+        val actual_out = dut.actual_out.peek().map { x => x.litValue }
+
+        // println(s"input is ${input_vector}, expectation is ${expected_out}, actual is ${actual_out}")
+        dut.pass.expect(true)
       }
-
-      val expected_out = input_vector.zipWithIndex.sortWith{case((left, left_idx), (right, right_idx)) => 
-        left > right  
-      }.map(_._2).toSeq
-
-      pokeVector(dut.in, input_vector.toSeq.map(floatToBits(_)))
-      pokeVector(dut.expected_out, expected_out.map(_.asUInt(2.W)))
-      val actual_out = dut.actual_out.peek().map { x => x.litValue }
-
-      // println(s"input is ${input_vector}, expectation is ${expected_out}, actual is ${actual_out}")
-      dut.pass.expect(true)
     }
   }
-}
 }

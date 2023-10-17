@@ -5,23 +5,19 @@ import hardfloat._
 import chisel3.experimental.VecLiterals._ // for VecLit
 import chisel3.util._
 
-/**
-  * For ray-box intersection tests, one ray and a Vec of four boxes are
-  * evaluated per cycle. The output is three Vecs (tmin_out, isIntersect and boxIndex), each containing four
-  * elements. The elements of each are sorted such that the following conditions
-  * stand:
-  * 1) intersecting boxes go before non-intersecting boxes
-  * 2) among intersecting boxes, nearer hits go before further hits
-  * 3) among non-intersecting boxes, no order is specified.
-  * 
+/** For ray-box intersection tests, one ray and a Vec of four boxes are
+  * evaluated per cycle. The output is three Vecs (tmin_out, isIntersect and
+  * boxIndex), each containing four elements. The elements of each are sorted
+  * such that the following conditions stand: 1) intersecting boxes go before
+  * non-intersecting boxes 2) among intersecting boxes, nearer hits go before
+  * further hits 3) among non-intersecting boxes, no order is specified.
+  *
   * For example, if input boxes 2 and 3 intersects the ray (in that order), 0
-  * and 1 does not, the output Vecs look like this: 
-  * tmin_out = (t2, t3, XX, XXX)
-  * isIntersect = (T, T, F, F)
-  * boxIndex = (2, 3, XX, XX)
-  *    
+  * and 1 does not, the output Vecs look like this: tmin_out = (t2, t3, XX, XXX)
+  * isIntersect = (T, T, F, F) boxIndex = (2, 3, XX, XX)
+  *
   * Note that for non-intersecting boxes, their tmin_out and boxIndex values are
-  * unspecified - at least not sorted in any means.  
+  * unspecified - at least not sorted in any means.
   */
 class Datapath extends Module {
   val in = IO(

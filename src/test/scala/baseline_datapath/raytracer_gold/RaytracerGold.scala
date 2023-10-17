@@ -47,11 +47,11 @@ case class float_3(
     val x: Float,
     val y: Float,
     val z: Float
-){
+) {
   def at(n: Int): Float = n match {
-    case 0 => x 
-    case 1 => y 
-    case 2 => z 
+    case 0 => x
+    case 1 => y
+    case 2 => z
     case _ => throw new Exception("Float only has 0, 1, 2 three dimensions")
   }
 }
@@ -65,14 +65,14 @@ class SW_Ray(
     val y: Float = math.abs(dir.y)
     val z: Float = math.abs(dir.z)
 
-    var maxInd = 0 
+    var maxInd = 0
     var maxVal = x
 
-    if(y > maxVal){
+    if (y > maxVal) {
       maxVal = y
-      maxInd = 1 
+      maxInd = 1
     }
-    if(z > maxVal){
+    if (z > maxVal) {
       maxInd = 2
     }
 
@@ -87,19 +87,21 @@ class SW_Ray(
     val _inv = float_3(_x, _y, _z)
     _inv
   }
-  
+
   val (kx, ky, kz): (Int, Int, Int) = {
     var _kz = max_dim()
-    var _kx = if(_kz+1==3){0}else{_kz+1}
-    var _ky = if(_kx+1==3){0}else{_kx+1}
-    if(dir.at(_kz) < 0.0f){
-      val temp = _kx 
-      _kx = _ky 
+    var _kx = if (_kz + 1 == 3) { 0 }
+    else { _kz + 1 }
+    var _ky = if (_kx + 1 == 3) { 0 }
+    else { _kx + 1 }
+    if (dir.at(_kz) < 0.0f) {
+      val temp = _kx
+      _kx = _ky
       _ky = temp
     }
     (_kx, _ky, _kz)
   }
-  
+
   val shear = float_3(
     x = dir.at(kx) / dir.at(kz),
     y = dir.at(ky) / dir.at(kz),
@@ -107,7 +109,8 @@ class SW_Ray(
   )
 
   override def toString(): String = {
-    f"${this.getClass().getName()}(origin(${origin.toString()}), dir(${dir.toString()}), kx($kx), ky($ky), kz($kz), shear(${shear.toString()}))"
+    f"${this.getClass().getName()}(origin(${origin.toString()}), dir(${dir
+        .toString()}), kx($kx), ky($ky), kz($kz), shear(${shear.toString()}))"
   }
 }
 
@@ -119,15 +122,14 @@ object SW_Ray {
   }
 }
 
-/**
- *  Default "constructor" places the box at +Inf, so that any ray will not
- *  intersect with it. This is better than placing the default box at the point
- *  of origin, which usually get calculated to be intersecting with a ray that
- *  passes through the origin. It is common in human-written test cases to have
- *  a origin-intersecting ray, and it is common too that some boxes are not
- *  specified because the human just wanted to test a few boxes instead of all
- *  four.  
- */
+/** Default "constructor" places the box at +Inf, so that any ray will not
+  * intersect with it. This is better than placing the default box at the point
+  * of origin, which usually get calculated to be intersecting with a ray that
+  * passes through the origin. It is common in human-written test cases to have
+  * a origin-intersecting ray, and it is common too that some boxes are not
+  * specified because the human just wanted to test a few boxes instead of all
+  * four.
+  */
 case class SW_Box(
     val x_min: Float = Float.PositiveInfinity,
     val x_max: Float = Float.PositiveInfinity,
@@ -138,20 +140,19 @@ case class SW_Box(
 )
 
 case class SW_Triangle(
-  val A: float_3 = float_3(0.0f, 0.0f, 0.0f),
-  val B: float_3 = float_3(0.0f, 0.0f, 0.0f), 
-  val C: float_3 = float_3(0.0f, 0.0f, 0.0f)
+    val A: float_3 = float_3(0.0f, 0.0f, 0.0f),
+    val B: float_3 = float_3(0.0f, 0.0f, 0.0f),
+    val C: float_3 = float_3(0.0f, 0.0f, 0.0f)
 )
 
 case class SW_CombinedData(
-  val ray: SW_Ray ,
-  val boxes: Seq[SW_Box],
-  val triangle: SW_Triangle,
-  val isTriangleOp: Boolean
+    val ray: SW_Ray,
+    val boxes: Seq[SW_Box],
+    val triangle: SW_Triangle,
+    val isTriangleOp: Boolean
 )
 
-/**
-  * A bunch of implicit conversion methods between SW and HW data types
+/** A bunch of implicit conversion methods between SW and HW data types
   */
 object RaytracerTestHelper {
   // implicit class TestableHWRay(dut_ray: baseline_datapath.Ray) {
@@ -210,7 +211,9 @@ object RaytracerTestHelper {
 
   // Whereas a RayBoxPair is expected, but see instead a tuple[SW_Ray, SW_Box],
   // this implicit conversion will be made.
-  implicit def fromSWRayAndSWBoxToRayBoxPair(rb: (SW_Ray, SW_Box)): RayBoxPair = {
+  implicit def fromSWRayAndSWBoxToRayBoxPair(
+      rb: (SW_Ray, SW_Box)
+  ): RayBoxPair = {
     import chisel3.experimental.BundleLiterals._
     val (sw_ray, sw_box) = rb
     lazy val dummy_rmp = new RayBoxPair(false)
@@ -240,16 +243,20 @@ object RaytracerTestHelper {
     )
   }
 
-  implicit def fromSWRaySWBoxSeqToRayBoxPairSeq(rbseq: Seq[(SW_Ray, SW_Box)]) : Seq[RayBoxPair] = {
+  implicit def fromSWRaySWBoxSeqToRayBoxPairSeq(
+      rbseq: Seq[(SW_Ray, SW_Box)]
+  ): Seq[RayBoxPair] = {
     rbseq.map(fromSWRayAndSWBoxToRayBoxPair(_))
   }
 
-  implicit def fromSWRayAndSWBoxesToCombinedRayBoxTriangleBundle(rb: SW_CombinedData): CombinedRayBoxTriangleBundle = {
+  implicit def fromSWRayAndSWBoxesToCombinedRayBoxTriangleBundle(
+      rb: SW_CombinedData
+  ): CombinedRayBoxTriangleBundle = {
     import chisel3.experimental.BundleLiterals._
-    val sw_ray= rb.ray
+    val sw_ray = rb.ray
     val sw_box = rb.boxes
     val sw_triangle = rb.triangle
-    val op = rb.isTriangleOp 
+    val op = rb.isTriangleOp
     assert(sw_box.length == 4)
 
     lazy val dummy_crbtb = new CombinedRayBoxTriangleBundle(false)
@@ -279,49 +286,51 @@ object RaytracerTestHelper {
       _.triangle.B.x -> floatToBits(sw_triangle.B.x),
       _.triangle.B.y -> floatToBits(sw_triangle.B.y),
       _.triangle.B.z -> floatToBits(sw_triangle.B.z),
-      _.triangle.C.x -> floatToBits(sw_triangle.C.x), 
+      _.triangle.C.x -> floatToBits(sw_triangle.C.x),
       _.triangle.C.y -> floatToBits(sw_triangle.C.y),
-      _.triangle.C.z -> floatToBits(sw_triangle.C.z),           
-      _.aabb(0) -> 
+      _.triangle.C.z -> floatToBits(sw_triangle.C.z),
+      _.aabb(0) ->
         dummy_aabb.Lit(
           _.x_min -> floatToBits(sw_box(0).x_min),
           _.x_max -> floatToBits(sw_box(0).x_max),
           _.y_min -> floatToBits(sw_box(0).y_min),
           _.y_max -> floatToBits(sw_box(0).y_max),
           _.z_min -> floatToBits(sw_box(0).z_min),
-          _.z_max -> floatToBits(sw_box(0).z_max),
+          _.z_max -> floatToBits(sw_box(0).z_max)
         ),
-      _.aabb(1) -> 
+      _.aabb(1) ->
         dummy_aabb.Lit(
           _.x_min -> floatToBits(sw_box(1).x_min),
           _.x_max -> floatToBits(sw_box(1).x_max),
           _.y_min -> floatToBits(sw_box(1).y_min),
           _.y_max -> floatToBits(sw_box(1).y_max),
           _.z_min -> floatToBits(sw_box(1).z_min),
-          _.z_max -> floatToBits(sw_box(1).z_max),
+          _.z_max -> floatToBits(sw_box(1).z_max)
         ),
-      _.aabb(2) -> 
+      _.aabb(2) ->
         dummy_aabb.Lit(
           _.x_min -> floatToBits(sw_box(2).x_min),
           _.x_max -> floatToBits(sw_box(2).x_max),
           _.y_min -> floatToBits(sw_box(2).y_min),
           _.y_max -> floatToBits(sw_box(2).y_max),
           _.z_min -> floatToBits(sw_box(2).z_min),
-          _.z_max -> floatToBits(sw_box(2).z_max),
+          _.z_max -> floatToBits(sw_box(2).z_max)
         ),
-      _.aabb(3) -> 
+      _.aabb(3) ->
         dummy_aabb.Lit(
           _.x_min -> floatToBits(sw_box(3).x_min),
           _.x_max -> floatToBits(sw_box(3).x_max),
           _.y_min -> floatToBits(sw_box(3).y_min),
           _.y_max -> floatToBits(sw_box(3).y_max),
           _.z_min -> floatToBits(sw_box(3).z_min),
-          _.z_max -> floatToBits(sw_box(3).z_max),
-        ),
+          _.z_max -> floatToBits(sw_box(3).z_max)
+        )
     )
   }
 
-  implicit def fromSWRayAndSWBoxesSeqToCombinedRayBoxTriangleBundleSeq(rbseq: Seq[SW_CombinedData]): Seq[CombinedRayBoxTriangleBundle] = {
+  implicit def fromSWRayAndSWBoxesSeqToCombinedRayBoxTriangleBundleSeq(
+      rbseq: Seq[SW_CombinedData]
+  ): Seq[CombinedRayBoxTriangleBundle] = {
     rbseq.map(fromSWRayAndSWBoxesToCombinedRayBoxTriangleBundle(_))
   }
 }
@@ -384,9 +393,9 @@ object RaytracerGold {
   }
 
   case class SW_RayBox_Result(
-    val t_min: Seq[Float],
-    val is_intersect: Seq[Boolean],
-    val box_index: Seq[Int]
+      val t_min: Seq[Float],
+      val is_intersect: Seq[Boolean],
+      val box_index: Seq[Int]
   )
 
   // Non-intersections are marked as PositiveInfinity
@@ -399,9 +408,12 @@ object RaytracerGold {
       box_index = (0 until 4).toList
     )
 
-    val sorted_result = unsorted_result.t_min.zip(unsorted_result.is_intersect).zip(unsorted_result.box_index).sortWith{
-      case(((t1, b1), idx1), ((t2, b2), idx2)) => t1 < t2
-    }
+    val sorted_result = unsorted_result.t_min
+      .zip(unsorted_result.is_intersect)
+      .zip(unsorted_result.box_index)
+      .sortWith { case (((t1, b1), idx1), ((t2, b2), idx2)) =>
+        t1 < t2
+      }
 
     SW_RayBox_Result(
       t_min = sorted_result.map(_._1._1),
@@ -411,31 +423,34 @@ object RaytracerGold {
   }
 
   case class SW_RayTriangle_Result(
-    val t_num: Float = 0.0f,
-    val t_denom: Float = 0.0f,
-    val is_hit: Boolean = false
+      val t_num: Float = 0.0f,
+      val t_denom: Float = 0.0f,
+      val is_hit: Boolean = false
   )
 
-  def testTriangleIntersection(ray: SW_Ray, triangle: SW_Triangle): SW_RayTriangle_Result = {
+  def testTriangleIntersection(
+      ray: SW_Ray,
+      triangle: SW_Triangle
+  ): SW_RayTriangle_Result = {
     lazy val default_result = SW_RayTriangle_Result()
     var result = default_result
-    
+
     val (kx, ky, kz) = (ray.kx, ray.ky, ray.kz)
     val A = float_3(
       triangle.A.x - ray.origin.x,
       triangle.A.y - ray.origin.y,
-      triangle.A.z - ray.origin.z,
-      )
+      triangle.A.z - ray.origin.z
+    )
     val B = float_3(
       triangle.B.x - ray.origin.x,
       triangle.B.y - ray.origin.y,
-      triangle.B.z - ray.origin.z,
-      )
+      triangle.B.z - ray.origin.z
+    )
     val C = float_3(
       triangle.C.x - ray.origin.x,
       triangle.C.y - ray.origin.y,
-      triangle.C.z - ray.origin.z,
-      )
+      triangle.C.z - ray.origin.z
+    )
 
     val Ax = A.at(kx) - ray.shear.x * A.at(kz)
     val Ay = A.at(ky) - ray.shear.y * A.at(kz)
@@ -448,19 +463,19 @@ object RaytracerGold {
     val V = Ax * Cy - Ay * Cx
     val W = Bx * Ay - By * Ax
 
-    if(U < 0.0f || V < 0.0f || W < 0.0f){
+    if (U < 0.0f || V < 0.0f || W < 0.0f) {
       // pass
     } else {
       result = result.copy(t_denom = U + V + W)
-      if(result.t_denom == 0.0f){
-        //pass
+      if (result.t_denom == 0.0f) {
+        // pass
       } else {
         val Az = ray.shear.z * A.at(kz)
         val Bz = ray.shear.z * B.at(kz)
         val Cz = ray.shear.z * C.at(kz)
 
         result = result.copy(t_num = U * Az + V * Bz + W * Cz)
-        if(result.t_num < 0.0f){
+        if (result.t_num < 0.0f) {
           // pass
         } else {
           result = result.copy(is_hit = true)
@@ -471,39 +486,40 @@ object RaytracerGold {
     result
   }
 
-  /**
-    * Generate a randomized AABB given the range
-    * -range <= x_min, x_max, y_min, y_max, z_min, z_max <= range
+  /** Generate a randomized AABB given the range -range <= x_min, x_max, y_min,
+    * y_max, z_min, z_max <= range
     */
   def genRandomBox(range: Float): SW_Box = {
     import scala.util.Random
     lazy val r = new Random()
     assert(range > 0.0f)
-    val rands = (0 until 6).map{_=>r.nextFloat()*range*2 - range}
+    val rands = (0 until 6).map { _ => r.nextFloat() * range * 2 - range }
     val b = new SW_Box(
-      min(rands(0), rands(1)), max(rands(0), rands(1)),
-      min(rands(2), rands(3)), max(rands(2), rands(3)),
-      min(rands(4), rands(5)), max(rands(4), rands(5)),
-      )
+      min(rands(0), rands(1)),
+      max(rands(0), rands(1)),
+      min(rands(2), rands(3)),
+      max(rands(2), rands(3)),
+      min(rands(4), rands(5)),
+      max(rands(4), rands(5))
+    )
     assert(b.x_min <= b.x_max)
     assert(b.y_min <= b.y_max)
     assert(b.z_min <= b.z_max)
     b
   }
 
-  /**
-    * Generate a randomized ray originating from a point within range
-    * -range <= origin.x, origin.y, origin.z <= range
+  /** Generate a randomized ray originating from a point within range -range <=
+    * origin.x, origin.y, origin.z <= range
     *
-    * The x/y/z direction of ray is between -range and range  
+    * The x/y/z direction of ray is between -range and range
     * @param range
     * @return
     */
   def genRandomRay(range: Float): SW_Ray = {
     import scala.util.Random
-    lazy val r = new Random() 
+    lazy val r = new Random()
     assert(range > 0.0f)
-    val rands = (0 until 6).map{_=>r.nextFloat()*2*range - range}
+    val rands = (0 until 6).map { _ => r.nextFloat() * 2 * range - range }
     val ray = new SW_Ray(
       float_3(rands(0), rands(1), rands(2)),
       float_3(rands(3), rands(4), rands(5))

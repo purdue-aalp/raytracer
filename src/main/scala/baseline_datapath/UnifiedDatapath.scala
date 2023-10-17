@@ -4,14 +4,20 @@ import chisel3._
 import hardfloat._
 import chisel3.experimental.VecLiterals._ // for VecLit
 import chisel3.util._
+import chisel3.experimental.dataview._
 
-class UnifiedDatapath extends Module{
+class UnifiedDatapath extends Module {
   val in = IO(
     Flipped(Decoupled(new CombinedRayBoxTriangleBundle(recorded_float = false)))
   )
   val out = IO(
     Decoupled(new UnifiedDatapathOutput(recorded_float = false))
   )
+
+  // always ready to accept jobs
+  in.ready := WireDefault(true.B)
+  out.valid := 0.U
+  out.bits := 0.U.asTypeOf((out.bits))
 
   // SOME CONSTANTS
   val _stage_count = 15;
@@ -53,18 +59,63 @@ class UnifiedDatapath extends Module{
   // 0x7f800000 is positive inf in 32-bit float
   val _positive_inf_RecFN = recFNFromFN(8, 24, 0x7f800000.U)
 
+  // Define the behavior of each stage as functions. Register their output to
+  // the "converyor belt" shift register.
+  // Synopsys: stage_register(idx) := stage_function(idx)(stage_register(idx-1))
+
+  // Each element of this array is an Option, that wraps a function object which
+  // maps a Valid[ExtendedPipelineBundle] to a Valid[ExtendedPipelineBundle]
+  val stage_functions = collection.mutable.ArrayBuffer.fill[Option[
+    Valid[ExtendedPipelineBundle] => Valid[ExtendedPipelineBundle]
+  ]](_stage_count)(None)
+
+  // Define the functions!
+  // stage 0 does not exist
+  // stage 1 is register input
+  // stage 2 is convert float32 to float33
+
   // The all-containing bundle that runs through all stages of the unified
-  // pipeline. Initialize them like shift registers. Later code in this file
-  // overwrites this definition. 
-  val stage_registers = Reg(Vec(_stage_count,
-    new ExtendedPipelineBundle(recorded_float = true)
-  ))
+  // pipeline.
+  val stage_registers = Reg(
+    Vec(_stage_count, Valid(new ExtendedPipelineBundle(recorded_float = true)))
+  )
+  // zero-th element is useless
   stage_registers(0) := 0.U.asTypeOf(stage_registers(0))
 
-  // Define the behavior of each stage as functions. Register their output to
-  // the "converyor belt" shift register
-  val stage_functions = new collection.mutable.ArrayBuffer[ExtendedPipelineBundle=>ExtendedPipelineBundle](_stage_count)
-  stage_functions(1) = {x=>???}
-  stage_functions(2) = {???}
+  // first element is useless too, because the first stage is "register input"
+  // stage, the values are still non-recorded float. See
+  // `stage_registers_1_actual` instead.
+  stage_registers(1) := 0.U.asTypeOf(stage_registers(0))
+
+  // chain up the stages!
+  // Either apply the specified transformation, or default identity function, on
+  // each stage's input
+  for (idx <- 1 until _stage_count) {
+    stage_registers(idx) := stage_functions(idx).getOrElse(
+      (x: Valid[ExtendedPipelineBundle]) => identity(x)
+    )(stage_registers(idx - 1))
+  }
+
+  // override the driver logic for stage_registers 1 and 2
+  val stage_registers_1_actual = Reg(
+    Valid(new CombinedRayBoxTriangleBundle(false))
+  )
+  stage_registers_1_actual.valid := in.fire
+  stage_registers_1_actual.bits := in.bits
+
+  stage_registers(2).valid := stage_registers_1_actual.valid
+  stage_registers(
+    2
+  ).bits.isTriangleOp := stage_registers_1_actual.bits.isTriangleOp
+  stage_registers(2).bits.ray := RayConvertFNtoRecFN(
+    stage_registers_1_actual.bits.ray
+  )
+  (stage_registers(2).bits.aabb zip stage_registers_1_actual.bits.aabb).map {
+    case (reg_2, reg_1) =>
+      reg_2 := AABBConvertFNtoRecFN(reg_1)
+  }
+  stage_registers(2).bits.triangle := TriangleConvertFNtoRecFN(
+    stage_registers_1_actual.bits.triangle
+  )
 
 }

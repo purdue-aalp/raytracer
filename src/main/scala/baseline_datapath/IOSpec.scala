@@ -63,6 +63,8 @@ class Triangle(recorded_float: Boolean = false) extends Bundle {
   val A = new Float3(recorded_float)
   val B = new Float3(recorded_float)
   val C = new Float3(recorded_float)
+
+  def isRecordedFloat(): Boolean = { recorded_float }
 }
 
 class RayBoxPair(recorded_float: Boolean = false) extends Bundle {
@@ -72,7 +74,7 @@ class RayBoxPair(recorded_float: Boolean = false) extends Bundle {
 
 class CombinedRayBoxTriangleBundle(recorded_float: Boolean = false)
     extends Bundle {
-  val _bit_width = if(recorded_float) 33.W else 32.W
+  val _bit_width = if (recorded_float) 33.W else 32.W
 
   val ray = new Ray(recorded_float)
 
@@ -84,16 +86,14 @@ class CombinedRayBoxTriangleBundle(recorded_float: Boolean = false)
   val isTriangleOp = Bool()
 }
 
-class UnifiedDatapathOutput(recorded_float: Boolean = false) extends Bundle{
-  val _bit_width = if(recorded_float) 33.W else 32.W
+class UnifiedDatapathOutput(recorded_float: Boolean = false) extends Bundle {
+  val _bit_width = if (recorded_float) 33.W else 32.W
 
-  /**
-    * Common
+  /** Common
     */
   val isTriangleOp = Bool()
 
-  /**
-    * For Ray-Box intersection
+  /** For Ray-Box intersection
     */
   // from index-0 to index-3, intersecting boxes goes before non-intersecting
   // boxes, nearer hits go before further hits.
@@ -102,8 +102,7 @@ class UnifiedDatapathOutput(recorded_float: Boolean = false) extends Bundle{
   val isIntersect = Vec(4, Bool())
   val boxIndex = Vec(4, UInt(2.W))
 
-  /**
-    * For Ray-Triangle intersection
+  /** For Ray-Triangle intersection
     */
   val t_num = Bits(_bit_width)
   val t_denom = Bits(_bit_width)
@@ -113,9 +112,9 @@ class UnifiedDatapathOutput(recorded_float: Boolean = false) extends Bundle{
 // Nothing more than this bundle needs to be passed between pipeline stages of
 // the Unified raytracer datapath. Obviously, not all fields will be used in
 // every stage. I entrust the several levels of compilers (FIRRTL, Verilator,
-// proprietary RTL synthesizer) to remove unused signals automatically. 
-class ExtendedPipelineBundle(recorded_float: Boolean) 
-extends CombinedRayBoxTriangleBundle(recorded_float){
+// proprietary RTL synthesizer) to remove unused signals automatically.
+class ExtendedPipelineBundle(recorded_float: Boolean)
+    extends CombinedRayBoxTriangleBundle(recorded_float) {
 
   // common and basic: defined in base trait CombinedRayBoxTriangleBundle
   // val ray = new Ray(recorded_float)
@@ -127,7 +126,7 @@ extends CombinedRayBoxTriangleBundle(recorded_float){
   val t_min = Vec(4, new Float3(recorded_float))
   val t_max = Vec(4, new Float3(recorded_float))
   val tmin = Vec(4, Bits(_bit_width))
-  val tmax = Vec(4, Bits(_bit_width)) 
+  val tmax = Vec(4, Bits(_bit_width))
   val isIntersect = Vec(4, Bool())
   val boxIndex = Vec(4, UInt(2.W))
 
@@ -148,11 +147,26 @@ extends CombinedRayBoxTriangleBundle(recorded_float){
 
 // Conversion circuits between 32-bit IEEE float and 33-bit recorded float
 
+object Float3ConvertFNtoRecFN {
+  def apply(in: Float3): Float3 = {
+    if (in.isRecordedFloat()) {
+      throw new Exception(
+        "input must be in IEEE-754 format before it can be converted to recorded format"
+      )
+    }
+    val out = Wire(new Float3(recorded_float = true))
+    out.x := recFNFromFN(8, 24, in.x)
+    out.y := recFNFromFN(8, 24, in.y)
+    out.z := recFNFromFN(8, 24, in.z)
+    out
+  }
+}
+
 object Float3ConvertRecFNtoFN {
   def apply(in: Float3): Float3 = {
     if (!in.isRecordedFloat()) {
       throw new Exception(
-        "input must be in IEEE-754 format before it can be converted to recorded format"
+        "input must be in recorded format before it can be converted to IEEE-754 format"
       )
     }
     val out = Wire(new Float3(recorded_float = false))
@@ -182,9 +196,9 @@ object RayConvertFNtoRecFN {
     out.inv.y := recFNFromFN(8, 24, in.inv.y)
     out.inv.z := recFNFromFN(8, 24, in.inv.z)
     out.extent := recFNFromFN(8, 24, in.extent)
-    out.kx := in.kx 
-    out.ky := in.ky 
-    out.kz := in.kz 
+    out.kx := in.kx
+    out.ky := in.ky
+    out.kz := in.kz
     out.shear.x := recFNFromFN(8, 24, in.shear.x)
     out.shear.y := recFNFromFN(8, 24, in.shear.y)
     out.shear.z := recFNFromFN(8, 24, in.shear.z)
@@ -212,9 +226,9 @@ object RayConvertRecFNtoFN {
     out.inv.y := fNFromRecFN(8, 24, in.inv.y)
     out.inv.z := fNFromRecFN(8, 24, in.inv.z)
     out.extent := fNFromRecFN(8, 24, in.extent)
-    out.kx := in.kx 
-    out.ky := in.ky 
-    out.kz := in.kz 
+    out.kx := in.kx
+    out.ky := in.ky
+    out.kz := in.kz
     out.shear.x := fNFromRecFN(8, 24, in.shear.x)
     out.shear.y := fNFromRecFN(8, 24, in.shear.y)
     out.shear.z := fNFromRecFN(8, 24, in.shear.z)
@@ -260,6 +274,40 @@ object AABBConvertRecFNtoFN {
     out.x_max := fNFromRecFN(8, 24, in.x_max)
     out.y_max := fNFromRecFN(8, 24, in.y_max)
     out.z_max := fNFromRecFN(8, 24, in.z_max)
+
+    out
+  }
+}
+
+object TriangleConvertFNtoRecFN {
+  def apply(in: Triangle): Triangle = {
+    if (in.isRecordedFloat() == true) {
+      throw new Exception(
+        "AABB must be in recorded format before it can be converted to IEEE-754 format"
+      )
+    }
+
+    val out = Wire(new Triangle(true))
+    out.A := Float3ConvertFNtoRecFN(in.A)
+    out.B := Float3ConvertFNtoRecFN(in.B)
+    out.C := Float3ConvertFNtoRecFN(in.C)
+
+    out
+  }
+}
+
+object TriangleConvertRecFNtoFN {
+  def apply(in: Triangle): Triangle = {
+    if (in.isRecordedFloat() == false) {
+      throw new Exception(
+        "AABB must be in recorded format before it can be converted to IEEE-754 format"
+      )
+    }
+
+    val out = Wire(new Triangle(false))
+    out.A := Float3ConvertRecFNtoFN(in.A)
+    out.B := Float3ConvertRecFNtoFN(in.B)
+    out.C := Float3ConvertRecFNtoFN(in.C)
 
     out
   }
