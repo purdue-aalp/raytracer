@@ -6,7 +6,17 @@ import chisel3.experimental.VecLiterals._ // for VecLit
 import chisel3.util._
 import chisel3.experimental.dataview._
 
+object DatapathConstants {
+  def _zero_RecFN = recFNFromFN(8, 24, 0x0.U)
+  def _neg_1_0_RecFN = recFNFromFN(8, 24, 0xbf800000.S)
+  def _pos_1_0_RecFN = recFNFromFN(8, 24, 0x3f800000.S)
+  // 0x7f800000 is positive inf in 32-bit float
+  def _positive_inf_RecFN = recFNFromFN(8, 24, 0x7f800000.S)
+}
+
 class UnifiedDatapath extends Module {
+  import DatapathConstants._
+
   // input is guaranteed to be registered by this module
   val in = IO(
     Flipped(Decoupled(new CombinedRayBoxTriangleBundle(recorded_float = false)))
@@ -33,40 +43,42 @@ class UnifiedDatapath extends Module {
     in.bits.aabb.length // this should be a Chisel elaboration-time known variable
   val _rounding_rule = consts.round_near_even
   val _tininess_rule = consts.tininess_beforeRounding
-  val _zero_RecFN = {
-    val convert_zero_int_to_zero_rec_float = Module(new INToRecFN(32, 8, 24))
-    convert_zero_int_to_zero_rec_float.io.signedIn := false.B
-    convert_zero_int_to_zero_rec_float.io.in := 0.U(32.W)
-    convert_zero_int_to_zero_rec_float.io.roundingMode := _rounding_rule
-    convert_zero_int_to_zero_rec_float.io.detectTininess := _tininess_rule
-    val out_val = convert_zero_int_to_zero_rec_float.io.out
-    out_val
-  }
-  val _neg_1_0_RecFN = {
-    val convert_neg_one_int_to_neg_one_rec_float = Module(
-      new INToRecFN(32, 8, 24)
-    )
-    convert_neg_one_int_to_neg_one_rec_float.io.signedIn := true.B
-    convert_neg_one_int_to_neg_one_rec_float.io.in := -1.S(32.W).asUInt
-    convert_neg_one_int_to_neg_one_rec_float.io.roundingMode := _rounding_rule
-    convert_neg_one_int_to_neg_one_rec_float.io.detectTininess := _tininess_rule
-    val out_val = convert_neg_one_int_to_neg_one_rec_float.io.out
-    out_val
-  }
-  val _pos_1_0_RecFN = {
-    val convert_pos_one_int_to_pos_one_rec_float = Module(
-      new INToRecFN(32, 8, 24)
-    )
-    convert_pos_one_int_to_pos_one_rec_float.io.signedIn := true.B
-    convert_pos_one_int_to_pos_one_rec_float.io.in := 1.S(32.W).asUInt
-    convert_pos_one_int_to_pos_one_rec_float.io.roundingMode := _rounding_rule
-    convert_pos_one_int_to_pos_one_rec_float.io.detectTininess := _tininess_rule
-    val out_val = convert_pos_one_int_to_pos_one_rec_float.io.out
-    out_val
-  }
-
-  // 0x7f800000 is positive inf in 32-bit float
-  val _positive_inf_RecFN = recFNFromFN(8, 24, 0x7f800000.U)
+  // val _zero_RecFN = {
+  //   val convert_zero_int_to_zero_rec_float = Module(new INToRecFN(32, 8, 24))
+  //   convert_zero_int_to_zero_rec_float.io.signedIn := false.B
+  //   convert_zero_int_to_zero_rec_float.io.in := 0.U(32.W)
+  //   convert_zero_int_to_zero_rec_float.io.roundingMode := _rounding_rule
+  //   convert_zero_int_to_zero_rec_float.io.detectTininess := _tininess_rule
+  //   val out_val = convert_zero_int_to_zero_rec_float.io.out
+  //   out_val
+  // }
+  // val _neg_1_0_RecFN = {
+  //   val convert_neg_one_int_to_neg_one_rec_float = Module(
+  //     new INToRecFN(32, 8, 24)
+  //   )
+  //   convert_neg_one_int_to_neg_one_rec_float.io.signedIn := true.B
+  //   convert_neg_one_int_to_neg_one_rec_float.io.in := -1.S(32.W).asUInt
+  //   convert_neg_one_int_to_neg_one_rec_float.io.roundingMode := _rounding_rule
+  //   convert_neg_one_int_to_neg_one_rec_float.io.detectTininess := _tininess_rule
+  //   val out_val = convert_neg_one_int_to_neg_one_rec_float.io.out
+  //   out_val
+  // }
+  // val _pos_1_0_RecFN = {
+  //   val convert_pos_one_int_to_pos_one_rec_float = Module(
+  //     new INToRecFN(32, 8, 24)
+  //   )
+  //   convert_pos_one_int_to_pos_one_rec_float.io.signedIn := true.B
+  //   convert_pos_one_int_to_pos_one_rec_float.io.in := 1.S(32.W).asUInt
+  //   convert_pos_one_int_to_pos_one_rec_float.io.roundingMode := _rounding_rule
+  //   convert_pos_one_int_to_pos_one_rec_float.io.detectTininess := _tininess_rule
+  //   val out_val = convert_pos_one_int_to_pos_one_rec_float.io.out
+  //   out_val
+  // }
+  // val _zero_RecFN = WireDefault(recFNFromFN(8, 24, 0x0.U))
+  // val _neg_1_0_RecFN = WireDefault(recFNFromFN(8, 24, 0xbf800000.S))
+  // val _pos_1_0_RecFN = WireDefault(recFNFromFN(8, 24, 0x3f800000.S))
+  // // 0x7f800000 is positive inf in 32-bit float
+  // val _positive_inf_RecFN = WireDefault(recFNFromFN(8, 24, 0x7f800000.S))
 
   /////////////////
   // STAGE BEHAVIOR
@@ -679,9 +691,22 @@ class UnifiedDatapath extends Module {
   // Either apply the specified transformation, or default identity function, on
   // each stage's input
   for (idx <- 1 until _stage_count) {
-    stage_registers(idx) := stage_functions(idx).getOrElse(
-      (x: Valid[ExtendedPipelineBundle]) => identity(x)
-    )(stage_registers(idx - 1))
+    // stage_registers(idx) := stage_functions(idx).getOrElse(
+    //   (x: Valid[ExtendedPipelineBundle]) => identity(x)
+    // )(stage_registers(idx - 1))
+
+    // the following code creates an anonymous module for each stage
+    val stage_comb_module = Module(new Module {
+      val intake = IO(Flipped(Valid(new ExtendedPipelineBundle(true))))
+      val emit = IO(Valid(new ExtendedPipelineBundle(true)))
+      val transform_function =
+        stage_functions(idx).getOrElse((x: Valid[ExtendedPipelineBundle]) =>
+          identity(x)
+        )
+      emit := transform_function(intake)
+    })
+    stage_comb_module.intake := stage_registers(idx - 1)
+    stage_registers(idx) := stage_comb_module.emit
   }
 
   // zero-th element is useless

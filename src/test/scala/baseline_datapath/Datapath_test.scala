@@ -301,11 +301,10 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
                 if (sw_r.is_hit) {
                   val hw_t = hw_t_num / hw_t_denom
                   val sw_t = sw_r.t_num / sw_r.t_denom
-                  val t_error = abs(hw_t-sw_t) / sw_t
+                  val t_error = abs(hw_t - sw_t) / sw_t
 
                   // assert(t_error <= float_tolerance_error, error_msg_obj)
-                  worst_normalized_error =
-                    max(worst_normalized_error, t_error)
+                  worst_normalized_error = max(worst_normalized_error, t_error)
                 }
 
                 dut.clock.step()
