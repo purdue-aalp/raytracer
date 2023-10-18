@@ -18,6 +18,17 @@ class Float3(recorded_float: Boolean = false) extends Bundle {
   val z = Bits(bit_width)
 
   def isRecordedFloat(): Boolean = { recorded_float }
+  def at(idx: UInt): Bits = {
+    val output = Wire(Bits(bit_width))
+    when(idx === 0.U) {
+      output := x
+    }.elsewhen(idx === 1.U) {
+      output := y
+    }.otherwise {
+      output := z
+    }
+    output
+  }
 }
 
 class Ray(recorded_float: Boolean = false) extends Bundle {

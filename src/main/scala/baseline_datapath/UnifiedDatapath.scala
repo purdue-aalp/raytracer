@@ -97,6 +97,52 @@ class UnifiedDatapath extends Module {
       emit.bits := 0.U.asTypeOf(emit.bits)
     }.elsewhen(intake.bits.isTriangleOp) {
       // ray-triangle
+      val _dest = Seq(
+        emit.bits.triangle.A.x,
+        emit.bits.triangle.A.y,
+        emit.bits.triangle.A.z,
+        emit.bits.triangle.B.x,
+        emit.bits.triangle.B.y,
+        emit.bits.triangle.B.z,
+        emit.bits.triangle.C.x,
+        emit.bits.triangle.C.y,
+        emit.bits.triangle.C.z
+      )
+
+      val _src1 = Seq(
+        intake.bits.triangle.A.x,
+        intake.bits.triangle.A.y,
+        intake.bits.triangle.A.z,
+        intake.bits.triangle.B.x,
+        intake.bits.triangle.B.y,
+        intake.bits.triangle.B.z,
+        intake.bits.triangle.C.x,
+        intake.bits.triangle.C.y,
+        intake.bits.triangle.C.z
+      )
+
+      val _src2 = Seq(
+        intake.bits.ray.origin.x,
+        intake.bits.ray.origin.y,
+        intake.bits.ray.origin.z,
+        intake.bits.ray.origin.x,
+        intake.bits.ray.origin.y,
+        intake.bits.ray.origin.z,
+        intake.bits.ray.origin.x,
+        intake.bits.ray.origin.y,
+        intake.bits.ray.origin.z
+      )
+
+      (_dest zip _src1 zip _src2).map { case ((_1, _2), _3) =>
+        val fu = Module(new AddRecFN(8, 24))
+        fu.io.subOp := true.B
+        fu.io.a := _2
+        fu.io.b := _3
+        fu.io.roundingMode := _rounding_rule
+        fu.io.detectTininess := _tininess_rule
+        _1 := fu.io.out
+      // TODO: handle exception flags!
+      }
     }.otherwise {
       // ray-box
       // the following implements the C-code:
@@ -155,7 +201,74 @@ class UnifiedDatapath extends Module {
 
     when(!intake.valid) {
       emit.bits := 0.U.asTypeOf(emit.bits)
-    }.elsewhen(intake.bits.isTriangleOp) {}.otherwise {
+    }.elsewhen(intake.bits.isTriangleOp) {
+      val kx = intake.bits.ray.kx
+      val ky = intake.bits.ray.ky
+      val kz = intake.bits.ray.kz
+
+      val _dest = Seq(
+        emit.bits.A.x,
+        emit.bits.A.y,
+        emit.bits.A.z,
+        emit.bits.B.x,
+        emit.bits.B.y,
+        emit.bits.B.z,
+        emit.bits.C.x,
+        emit.bits.C.y,
+        emit.bits.C.z
+      )
+
+      val _src1 = Seq(
+        FNFlipSign(intake.bits.ray.shear.x),
+        FNFlipSign(intake.bits.ray.shear.y),
+        intake.bits.ray.shear.z,
+        FNFlipSign(intake.bits.ray.shear.x),
+        FNFlipSign(intake.bits.ray.shear.y),
+        intake.bits.ray.shear.z,
+        FNFlipSign(intake.bits.ray.shear.x),
+        FNFlipSign(intake.bits.ray.shear.y),
+        intake.bits.ray.shear.z
+      )
+
+      val _src2 = Seq(
+        intake.bits.triangle.A.at(kz),
+        intake.bits.triangle.A.at(kz),
+        intake.bits.triangle.A.at(kz),
+        intake.bits.triangle.B.at(kz),
+        intake.bits.triangle.B.at(kz),
+        intake.bits.triangle.B.at(kz),
+        intake.bits.triangle.C.at(kz),
+        intake.bits.triangle.C.at(kz),
+        intake.bits.triangle.C.at(kz)
+      )
+
+      val _src3 = Seq(
+        intake.bits.triangle.A.at(kx),
+        intake.bits.triangle.A.at(ky),
+        _zero_RecFN,
+        intake.bits.triangle.B.at(kx),
+        intake.bits.triangle.B.at(ky),
+        _zero_RecFN,
+        intake.bits.triangle.C.at(kx),
+        intake.bits.triangle.C.at(ky),
+        _zero_RecFN
+      )
+
+      // _dest = _src1 * _src2 + _src3
+      (_dest zip _src1 zip _src2 zip _src3).map { case (((_1, _2), _3), _4) =>
+        val fu = Module(new MulAddRecFN(8, 24))
+        fu.io.op := 0.U
+        fu.io.a := _2
+        fu.io.b := _3
+        fu.io.c := _4
+        fu.io.roundingMode := _rounding_rule
+        fu.io.detectTininess := _tininess_rule
+
+        _1 := fu.io.out
+      // handle exception flags!
+      }
+
+    }.otherwise {
       // the following implements the C-code
       /*
         float tp_min_x = child.x_min * ray.inv.x;
@@ -191,11 +304,20 @@ class UnifiedDatapath extends Module {
           intake.bits.ray.inv.z
         )
         (_dest zip _src1 zip _src2) foreach { case ((_1, _2), _3) =>
-          val fu = Module(new MulRecFN(8, 24))
+          // val fu = Module(new MulRecFN(8, 24))
+          // fu.io.a := _2
+          // fu.io.b := _3
+          // fu.io.roundingMode := _rounding_rule
+          // fu.io.detectTininess := _tininess_rule
+          // _1 := fu.io.out
+          val fu = Module(new MulAddRecFN(8, 24))
+          fu.io.op := 0.U
           fu.io.a := _2
           fu.io.b := _3
+          fu.io.c := _zero_RecFN
           fu.io.roundingMode := _rounding_rule
           fu.io.detectTininess := _tininess_rule
+
           _1 := fu.io.out
         // TODO: handle exception flags!
         }
