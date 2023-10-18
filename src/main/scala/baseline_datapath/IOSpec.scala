@@ -117,7 +117,7 @@ class UnifiedDatapathOutput(recorded_float: Boolean = false) extends Bundle {
     */
   val t_num = Bits(_bit_width)
   val t_denom = Bits(_bit_width)
-  val hit_status = Bool()
+  val triangle_hit = Bool()
 }
 
 // Nothing more than this bundle needs to be passed between pipeline stages of
@@ -151,9 +151,12 @@ class ExtendedPipelineBundle(recorded_float: Boolean)
   val U_subtrahend = Bits(_bit_width)
   val V_subtrahend = Bits(_bit_width)
   val W_subtrahend = Bits(_bit_width)
+  val U_Az = Bits(_bit_width)
+  val V_Bz = Bits(_bit_width)
+  val W_Cz = Bits(_bit_width)
   val t_denom = Bits(_bit_width)
   val t_num = Bits(_bit_width)
-  val hit_status = Bool()
+  val triangle_hit = Bool()
 }
 
 // Conversion circuits between 32-bit IEEE float and 33-bit recorded float

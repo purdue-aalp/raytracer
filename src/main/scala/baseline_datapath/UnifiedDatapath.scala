@@ -86,7 +86,8 @@ class UnifiedDatapath extends Module {
   // stage 0 does not exist
   // stage 1 is register input
   // stage 2 is convert float32 to float33
-  // stage 3 performs 24 adds for ray-box, or 9 adds for ray-triangle
+  // stage 3 performs 24 adds for ray-box, or 9 adds for ray-triangle, to
+  // translate the geometries to the origin of the ray
   stage_functions(3) = Some({ intake =>
     val emit = Wire(Valid(new ExtendedPipelineBundle(true)))
 
@@ -195,6 +196,9 @@ class UnifiedDatapath extends Module {
     emit
   })
 
+  // stage 4 performs 24 mul-adds for ray-box to find out the time intersection
+  // intervals, or 9 mul-adds for ray-triangle to perform shear and scale of
+  // triangle vertices
   stage_functions(4) = Some({ intake =>
     val emit = Wire(Valid(new ExtendedPipelineBundle(true)))
     emit := intake
@@ -327,6 +331,200 @@ class UnifiedDatapath extends Module {
     emit
   })
 
+  // stage 5 performs 6 muls for ray-triangle test to figure out the minuends and
+  // subtrahends of U, V, W
+  stage_functions(5) = Some({ intake =>
+    val emit = Wire(Valid(new ExtendedPipelineBundle(true)))
+    emit := intake
+
+    when(!intake.valid) {
+      emit.bits := 0.U.asTypeOf((emit.bits))
+    }.elsewhen(intake.bits.isTriangleOp) {
+      val _dest = Seq(
+        emit.bits.U,
+        emit.bits.V,
+        emit.bits.W,
+        emit.bits.U_subtrahend,
+        emit.bits.V_subtrahend,
+        emit.bits.W_subtrahend
+      )
+
+      val _src1 = Seq(
+        intake.bits.C.x,
+        intake.bits.A.x,
+        intake.bits.B.x,
+        intake.bits.C.y,
+        intake.bits.A.y,
+        intake.bits.B.y
+      )
+
+      val _src2 = Seq(
+        intake.bits.B.y,
+        intake.bits.C.y,
+        intake.bits.A.y,
+        intake.bits.B.x,
+        intake.bits.C.x,
+        intake.bits.A.x
+      )
+
+      (_dest zip _src1 zip _src2).map { case ((_1, _2), _3) =>
+        val fu = Module(new MulRecFN(8, 24))
+        fu.io.a := _2
+        fu.io.b := _3
+        fu.io.roundingMode := _rounding_rule
+        fu.io.detectTininess := _tininess_rule
+
+        _1 := fu.io.out
+      // handle exception flags!
+      }
+    }.otherwise {}
+
+    emit
+  })
+
+  // stage 6 performs 3 adds for ray-triangle test to find the value of U, V, W
+  stage_functions(6) = Some({ intake =>
+    val emit = Wire(Valid(new ExtendedPipelineBundle(true)))
+    emit := intake
+
+    when(!intake.valid) {
+      emit.bits := 0.U.asTypeOf((emit.bits))
+    }.elsewhen(intake.bits.isTriangleOp) {
+      val _dest = Seq(
+        emit.bits.U,
+        emit.bits.V,
+        emit.bits.W
+      )
+      val _src1 = Seq(
+        intake.bits.U,
+        intake.bits.V,
+        intake.bits.W
+      )
+      val _src2 = Seq(
+        intake.bits.U_subtrahend,
+        intake.bits.V_subtrahend,
+        intake.bits.W_subtrahend
+      )
+      (_dest zip _src1 zip _src2).map { case ((_1, _2), _3) =>
+        val fu = Module(new AddRecFN(8, 24))
+        fu.io.subOp := true.B
+        fu.io.a := _2
+        fu.io.b := _3
+        fu.io.roundingMode := _rounding_rule
+        fu.io.detectTininess := _tininess_rule
+
+        _1 := fu.io.out
+      // handle exception flags!
+      }
+
+    }.otherwise {}
+
+    emit
+  })
+
+  // stage 7 calculates U*Az, V*Bz and W*Cz for ray-triangle test
+  stage_functions(7) = Some({ intake =>
+    val emit = Wire(Valid(new ExtendedPipelineBundle(true)))
+    emit := intake
+
+    when(!intake.valid) {
+      emit.bits := 0.U.asTypeOf(emit.bits)
+    }.elsewhen(intake.bits.isTriangleOp) {
+      val _dest = Seq(
+        emit.bits.U_Az,
+        emit.bits.V_Bz,
+        emit.bits.W_Cz
+      )
+      val _src1 = Seq(
+        intake.bits.U,
+        intake.bits.V,
+        intake.bits.W
+      )
+      val _src2 = Seq(
+        intake.bits.A.z,
+        intake.bits.B.z,
+        intake.bits.C.z
+      )
+      (_dest zip _src1 zip _src2).map { case ((_1, _2), _3) =>
+        val fu = Module(new MulRecFN(8, 24))
+        fu.io.a := _2
+        fu.io.b := _3
+        fu.io.roundingMode := _rounding_rule
+        fu.io.detectTininess := _tininess_rule
+
+        _1 := fu.io.out
+      // handle exception flags
+      }
+    }.otherwise {}
+
+    emit
+  })
+
+  // stage 8 does two adds for ray-triangle test to find out the partial sum for
+  // t_denom and t_num
+  stage_functions(8) = Some({ intake =>
+    val emit = Wire(Valid(new ExtendedPipelineBundle(true)))
+    emit := intake
+
+    when(!intake.valid) {
+      emit.bits := 0.U.asTypeOf(emit.bits)
+    }.elsewhen(intake.bits.isTriangleOp) {
+      val fu_denom = Module(new AddRecFN(8, 24))
+      fu_denom.io.subOp := false.B
+      fu_denom.io.a := intake.bits.U
+      fu_denom.io.b := intake.bits.V
+      fu_denom.io.roundingMode := _rounding_rule
+      fu_denom.io.detectTininess := _tininess_rule
+      emit.bits.t_denom := fu_denom.io.out
+      // handle exception flags
+
+      val fu_num = Module(new AddRecFN(8, 24))
+      fu_num.io.subOp := false.B
+      fu_num.io.a := intake.bits.U_Az
+      fu_num.io.b := intake.bits.V_Bz
+      fu_num.io.roundingMode := _rounding_rule
+      fu_num.io.detectTininess := _tininess_rule
+      emit.bits.t_num := fu_num.io.out
+      // handle exception flags
+    }.otherwise {}
+
+    emit
+  })
+
+  // stage 9 performs two adds for ray-triangle test, to complete the summation
+  // of t_denom and t_num
+  stage_functions(9) = Some({ intake =>
+    val emit = Wire(Valid(new ExtendedPipelineBundle(true)))
+    emit := intake
+
+    when(!intake.valid) {
+      emit.bits := 0.U.asTypeOf(emit.bits)
+    }.elsewhen(intake.bits.isTriangleOp) {
+      val fu_denom = Module(new AddRecFN(8, 24))
+      fu_denom.io.subOp := false.B
+      fu_denom.io.a := intake.bits.t_denom
+      fu_denom.io.b := intake.bits.W
+      fu_denom.io.roundingMode := _rounding_rule
+      fu_denom.io.detectTininess := _tininess_rule
+      emit.bits.t_denom := fu_denom.io.out
+      // handle exception flags
+
+      val fu_num = Module(new AddRecFN(8, 24))
+      fu_num.io.subOp := false.B
+      fu_num.io.a := intake.bits.t_num
+      fu_num.io.b := intake.bits.W_Cz
+      fu_num.io.roundingMode := _rounding_rule
+      fu_num.io.detectTininess := _tininess_rule
+      emit.bits.t_num := fu_num.io.out
+      // handle exception flags
+    }.otherwise {}
+
+    emit
+  })
+
+  // stage 10 performs 12 CAS, 10 quad-sorts and 4 comparisons for ray-box
+  // intersection to figure out intersecting boxes and sort them; or 5
+  // comparisons for ray-triangle test to determine validity of intersection
   stage_functions(10) = Some({ intake =>
     val emit = Wire(Valid(new ExtendedPipelineBundle(true)))
     emit := intake
@@ -335,7 +533,34 @@ class UnifiedDatapath extends Module {
 
     when(!intake.valid) {
       emit.bits := 0.U.asTypeOf(emit.bits)
-    }.elsewhen(intake.bits.isTriangleOp) {}.otherwise {
+    }.elsewhen(intake.bits.isTriangleOp) {
+      val _src1 = Seq(
+        intake.bits.U,
+        intake.bits.V,
+        intake.bits.W,
+        intake.bits.t_denom,
+        intake.bits.t_num
+      )
+      val _src2 = Seq.fill(5)(_zero_RecFN)
+      val _fu = Seq.fill(5)(Module(new CompareRecFN(8, 24)))
+
+      (_src1 zip _src2 zip _fu).map { case ((_1, _2), _3) =>
+        _3.io.a := _1
+        _3.io.b := _2
+        _3.io.signaling := true.B
+      }
+
+      when(_fu(0).io.lt || _fu(1).io.lt || _fu(2).io.lt || _fu(4).io.lt) {
+        // miss if U/V/W/t_num < 0.0f
+        emit.bits.triangle_hit := false.B
+      }.elsewhen(_fu(3).io.eq) {
+        // miss if t_denom == 0.0f
+        emit.bits.triangle_hit := false.B
+      }.otherwise {
+        emit.bits.triangle_hit := true.B
+      }
+    }.otherwise {
+      // ray-box test
       def flip_intervals_if_dir_is_neg(
           c_out: Bits,
           d_out: Bits,
@@ -436,7 +661,6 @@ class UnifiedDatapath extends Module {
       emit.bits.isIntersect.zip(emit.bits.boxIndex).foreach { case (b, idx) =>
         b := isIntersect_intermediate(idx)
       }
-
     }
 
     emit
@@ -494,10 +718,13 @@ class UnifiedDatapath extends Module {
   // TAP OUTPUT FROM LAST MEANINGFUL STAGE'S REGISTER
   /////////////////////////
 
-  out.bits := 0.U.asTypeOf((out.bits))
+  // out.bits := 0.U.asTypeOf((out.bits))
   out.valid := stage_registers(10).valid
   out.bits.isTriangleOp := stage_registers(10).bits.isTriangleOp
   out.bits.tmin_out := stage_registers(10).bits.tmin.map(fNFromRecFN(8, 24, _))
   out.bits.isIntersect := stage_registers(10).bits.isIntersect
   out.bits.boxIndex := stage_registers(10).bits.boxIndex
+  out.bits.t_denom := stage_registers(10).bits.t_denom
+  out.bits.t_num := stage_registers(10).bits.t_num
+  out.bits.triangle_hit := stage_registers(10).bits.triangle_hit
 }
