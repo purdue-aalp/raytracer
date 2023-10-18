@@ -705,6 +705,7 @@ class UnifiedDatapath extends Module {
         )
       emit := transform_function(intake)
     })
+    stage_comb_module.suggestName(s"stage_comb_module_${idx}")
     stage_comb_module.intake := stage_registers(idx - 1)
     stage_registers(idx) := stage_comb_module.emit
   }
