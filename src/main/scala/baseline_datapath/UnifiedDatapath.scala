@@ -724,7 +724,7 @@ class UnifiedDatapath extends Module {
   out.bits.tmin_out := stage_registers(10).bits.tmin.map(fNFromRecFN(8, 24, _))
   out.bits.isIntersect := stage_registers(10).bits.isIntersect
   out.bits.boxIndex := stage_registers(10).bits.boxIndex
-  out.bits.t_denom := stage_registers(10).bits.t_denom
-  out.bits.t_num := stage_registers(10).bits.t_num
+  out.bits.t_denom := fNFromRecFN(8, 24, stage_registers(10).bits.t_denom)
+  out.bits.t_num := fNFromRecFN(8, 24, stage_registers(10).bits.t_num)
   out.bits.triangle_hit := stage_registers(10).bits.triangle_hit
 }
