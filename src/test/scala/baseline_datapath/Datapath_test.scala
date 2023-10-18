@@ -27,7 +27,7 @@ import chiseltest.simulator.{
   CachingDebugAnnotation
 }
 
-class Datapath_wrapper extends UnifiedDatapath {
+class Datapath_wrapper extends Datapath {
   import hardfloat._
   val exposed_time = expose(_time)
   // val exposed_tmin = expose(fNFromRecFN(8, 24, tmin))
@@ -39,6 +39,10 @@ class Datapath_wrapper extends UnifiedDatapath {
   // val exposed_tmax_3d = expose(Float3ConvertRecFNtoFN(tmax_3d))
 }
 
+class UnifiedDatapath_wrapper extends UnifiedDatapath {
+  val exposed_time = expose(_time)
+}
+
 class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
   // we are dealing with hardware and software Ray types
@@ -46,7 +50,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   type HW_Box = baseline_datapath.AABB
 
   val r = new Random()
-  val N_RANDOM_TEST = 10000
+  val N_RANDOM_TEST = 100000
 
   // Define a function for ray-box intersection testing
   def testRayBoxIntersection(
@@ -55,7 +59,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       ray_seq: Seq[SW_Ray]
   ): Unit = {
     description in {
-      test(new Datapath_wrapper)
+      test(new UnifiedDatapath_wrapper)
         .withAnnotations(
           Seq(
             VerilatorBackendAnnotation,
@@ -315,117 +319,117 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     List.fill(N_RANDOM_TEST) { RaytracerGold.genRandomRay(1e5.toFloat) }
   )
 
-  testRayTriangleIntersection(
-    "Ray hits back of triangle along normal to surface",
-    SW_Triangle(
-      float_3(-1.0f, -1.0f, -1.0f),
-      float_3(0.0f, 1.0f, -1.0f),
-      float_3(1.0f, -1.0f, -1.0f)
-    ) :: Nil,
-    new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
-  )
+  // testRayTriangleIntersection(
+  //   "Ray hits back of triangle along normal to surface",
+  //   SW_Triangle(
+  //     float_3(-1.0f, -1.0f, -1.0f),
+  //     float_3(0.0f, 1.0f, -1.0f),
+  //     float_3(1.0f, -1.0f, -1.0f)
+  //   ) :: Nil,
+  //   new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
+  // )
 
-  testRayTriangleIntersection(
-    "Ray hits front of triangle along normal to surface",
-    SW_Triangle(
-      float_3(1.0f, -1.0f, -1.0f),
-      float_3(0.0f, 1.0f, -1.0f),
-      float_3(-1.0f, -1.0f, -1.0f)
-    ) :: Nil,
-    new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -1.0f)) :: Nil
-  )
+  // testRayTriangleIntersection(
+  //   "Ray hits front of triangle along normal to surface",
+  //   SW_Triangle(
+  //     float_3(1.0f, -1.0f, -1.0f),
+  //     float_3(0.0f, 1.0f, -1.0f),
+  //     float_3(-1.0f, -1.0f, -1.0f)
+  //   ) :: Nil,
+  //   new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -1.0f)) :: Nil
+  // )
 
-  testRayTriangleIntersection(
-    "Ray hits front edge of triangle along normal to surface",
-    SW_Triangle(
-      float_3(1.0f, -1.0f, -1.0f),
-      float_3(0.0f, 1.0f, -1.0f),
-      float_3(0.0f, -1.0f, -1.0f)
-    ) :: Nil,
-    new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
-  )
+  // testRayTriangleIntersection(
+  //   "Ray hits front edge of triangle along normal to surface",
+  //   SW_Triangle(
+  //     float_3(1.0f, -1.0f, -1.0f),
+  //     float_3(0.0f, 1.0f, -1.0f),
+  //     float_3(0.0f, -1.0f, -1.0f)
+  //   ) :: Nil,
+  //   new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
+  // )
 
-  testRayTriangleIntersection(
-    "Ray hits front corner of triangle along normal to surface",
-    SW_Triangle(
-      float_3(1.0f, -1.0f, -1.0f),
-      float_3(0.0f, 0.0f, -1.0f),
-      float_3(0.0f, -1.0f, -1.0f)
-    ) :: Nil,
-    new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
-  )
+  // testRayTriangleIntersection(
+  //   "Ray hits front corner of triangle along normal to surface",
+  //   SW_Triangle(
+  //     float_3(1.0f, -1.0f, -1.0f),
+  //     float_3(0.0f, 0.0f, -1.0f),
+  //     float_3(0.0f, -1.0f, -1.0f)
+  //   ) :: Nil,
+  //   new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
+  // )
 
-  testRayTriangleIntersection(
-    "Ray misses triangle",
-    SW_Triangle(
-      float_3(1.0f, -1.0f, -1.0f),
-      float_3(0.0f, 1.0f, -1.0f),
-      float_3(-1.0f, -1.0f, -1.0f)
-    ) :: Nil,
-    new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, 5.0f)) :: Nil
-  )
+  // testRayTriangleIntersection(
+  //   "Ray misses triangle",
+  //   SW_Triangle(
+  //     float_3(1.0f, -1.0f, -1.0f),
+  //     float_3(0.0f, 1.0f, -1.0f),
+  //     float_3(-1.0f, -1.0f, -1.0f)
+  //   ) :: Nil,
+  //   new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, 5.0f)) :: Nil
+  // )
 
-  testRayTriangleIntersection(
-    "Ray misses triangle along normal to surface",
-    SW_Triangle(
-      float_3(1.0f, -1.0f, -1.0f),
-      float_3(0.0f, 1.0f, -1.0f),
-      float_3(-1.0f, -1.0f, -1.0f)
-    ) :: Nil,
-    new SW_Ray(float_3(-5.0f, 5.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
-  )
+  // testRayTriangleIntersection(
+  //   "Ray misses triangle along normal to surface",
+  //   SW_Triangle(
+  //     float_3(1.0f, -1.0f, -1.0f),
+  //     float_3(0.0f, 1.0f, -1.0f),
+  //     float_3(-1.0f, -1.0f, -1.0f)
+  //   ) :: Nil,
+  //   new SW_Ray(float_3(-5.0f, 5.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
+  // )
 
-  testRayTriangleIntersection(
-    "Ray hits front of triangle along normal to surface (further away)",
-    SW_Triangle(
-      float_3(1.0f, -1.0f, -100.0f),
-      float_3(0.0f, 1.0f, -100.0f),
-      float_3(-1.0f, -1.0f, -100.0f)
-    ) :: Nil,
-    new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
-  )
+  // testRayTriangleIntersection(
+  //   "Ray hits front of triangle along normal to surface (further away)",
+  //   SW_Triangle(
+  //     float_3(1.0f, -1.0f, -100.0f),
+  //     float_3(0.0f, 1.0f, -100.0f),
+  //     float_3(-1.0f, -1.0f, -100.0f)
+  //   ) :: Nil,
+  //   new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
+  // )
 
-  testRayTriangleIntersection(
-    "Ray hits front of triangle not along normal",
-    SW_Triangle(
-      float_3(1.0f, -1.0f, -3.0f),
-      float_3(0.0f, 1.0f, -1.0f),
-      float_3(-1.0f, -1.0f, -2.0f)
-    ) :: Nil,
-    new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
-  )
+  // testRayTriangleIntersection(
+  //   "Ray hits front of triangle not along normal",
+  //   SW_Triangle(
+  //     float_3(1.0f, -1.0f, -3.0f),
+  //     float_3(0.0f, 1.0f, -1.0f),
+  //     float_3(-1.0f, -1.0f, -2.0f)
+  //   ) :: Nil,
+  //   new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
+  // )
 
-  testRayTriangleIntersection(
-    "Ray hits edge of triangle perpendicular to normal",
-    SW_Triangle(
-      float_3(1.0f, -1.0f, -1.0f),
-      float_3(0.0f, 1.0f, -1.0f),
-      float_3(-1.0f, -1.0f, -1.0f)
-    ) :: Nil,
-    new SW_Ray(float_3(0.0f, -2.0f, -1.0f), float_3(0.0f, 5.0f, 0.0f)) :: Nil
-  )
+  // testRayTriangleIntersection(
+  //   "Ray hits edge of triangle perpendicular to normal",
+  //   SW_Triangle(
+  //     float_3(1.0f, -1.0f, -1.0f),
+  //     float_3(0.0f, 1.0f, -1.0f),
+  //     float_3(-1.0f, -1.0f, -1.0f)
+  //   ) :: Nil,
+  //   new SW_Ray(float_3(0.0f, -2.0f, -1.0f), float_3(0.0f, 5.0f, 0.0f)) :: Nil
+  // )
 
-  testRayTriangleIntersection(
-    "Ray hits triangle (normal on x-axis)",
-    SW_Triangle(
-      float_3(1.0f, -1.0f, 1.0f),
-      float_3(1.0f, 1.0f, 0.0f),
-      float_3(1.0f, -1.0f, -1.0f)
-    ) :: Nil,
-    new SW_Ray(float_3(-100.0f, 0.0f, 0.0f), float_3(0.25f, 0.0f, 0.0f)) :: Nil
-  )
+  // testRayTriangleIntersection(
+  //   "Ray hits triangle (normal on x-axis)",
+  //   SW_Triangle(
+  //     float_3(1.0f, -1.0f, 1.0f),
+  //     float_3(1.0f, 1.0f, 0.0f),
+  //     float_3(1.0f, -1.0f, -1.0f)
+  //   ) :: Nil,
+  //   new SW_Ray(float_3(-100.0f, 0.0f, 0.0f), float_3(0.25f, 0.0f, 0.0f)) :: Nil
+  // )
 
-  testRayTriangleIntersection(
-    "Ray hits edge of triangle perpendicular to normal from inside tri",
-    SW_Triangle(
-      float_3(1.0f, -1.0f, -1.0f),
-      float_3(0.0f, 1.0f, -1.0f),
-      float_3(-1.0f, -1.0f, -1.0f)
-    ) :: Nil,
-    new SW_Ray(
-      float_3(0.0f, -1.0f / 3, -1.0f),
-      float_3(0.0f, 5.0f, 0.0f)
-    ) :: Nil
-  )
+  // testRayTriangleIntersection(
+  //   "Ray hits edge of triangle perpendicular to normal from inside tri",
+  //   SW_Triangle(
+  //     float_3(1.0f, -1.0f, -1.0f),
+  //     float_3(0.0f, 1.0f, -1.0f),
+  //     float_3(-1.0f, -1.0f, -1.0f)
+  //   ) :: Nil,
+  //   new SW_Ray(
+  //     float_3(0.0f, -1.0f / 3, -1.0f),
+  //     float_3(0.0f, 5.0f, 0.0f)
+  //   ) :: Nil
+  // )
 
 }

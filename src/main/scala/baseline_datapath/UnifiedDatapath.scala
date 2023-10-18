@@ -7,19 +7,27 @@ import chisel3.util._
 import chisel3.experimental.dataview._
 
 class UnifiedDatapath extends Module {
+  // input is guaranteed to be registered by this module
   val in = IO(
     Flipped(Decoupled(new CombinedRayBoxTriangleBundle(recorded_float = false)))
   )
+
+  // output is not registered, it is driven by logic
   val out = IO(
     Decoupled(new UnifiedDatapathOutput(recorded_float = false))
   )
 
-  // always ready to accept jobs
+  // always ready to accept jobs each cycle
   in.ready := WireDefault(true.B)
-  // out.valid := 0.U
-  // out.bits := 0.U.asTypeOf((out.bits))
 
+  // A cycle counter, that we can use when debugging the module
+  // It shall disappear in synthesis, so no PPA impact
+  val (_time, _) = Counter(true.B, (1 << 31) - 1)
+  dontTouch(_time)
+
+  /////////////////
   // SOME CONSTANTS
+  /////////////
   val _stage_count = 15;
   val _box_plurality =
     in.bits.aabb.length // this should be a Chisel elaboration-time known variable
@@ -56,13 +64,13 @@ class UnifiedDatapath extends Module {
     val out_val = convert_pos_one_int_to_pos_one_rec_float.io.out
     out_val
   }
+
   // 0x7f800000 is positive inf in 32-bit float
   val _positive_inf_RecFN = recFNFromFN(8, 24, 0x7f800000.U)
 
-  // A cycle counter, that we can use when debugging the module
-  // It shall disappear in synthesis, so no PPA impact
-  val (_time, _) = Counter(true.B, (1 << 31) - 1)
-  dontTouch(_time)
+  /////////////////
+  // STAGE BEHAVIOR
+  ///////////////////
 
   // Define the behavior of each stage as functions.
   // Register their output to the "converyor belt" shift register.
@@ -145,7 +153,7 @@ class UnifiedDatapath extends Module {
     val emit = Wire(Valid(new ExtendedPipelineBundle(true)))
     emit := intake
 
-    when(!emit.valid) {
+    when(!intake.valid) {
       emit.bits := 0.U.asTypeOf(emit.bits)
     }.elsewhen(intake.bits.isTriangleOp) {}.otherwise {
       // the following implements the C-code
@@ -162,9 +170,9 @@ class UnifiedDatapath extends Module {
           emit.bits.t_min(box_idx).x,
           emit.bits.t_min(box_idx).y,
           emit.bits.t_min(box_idx).z,
-          emit.bits.t_min(box_idx).x,
-          emit.bits.t_min(box_idx).y,
-          emit.bits.t_min(box_idx).z
+          emit.bits.t_max(box_idx).x,
+          emit.bits.t_max(box_idx).y,
+          emit.bits.t_max(box_idx).z
         )
         val _src1 = Seq(
           intake.bits.aabb(box_idx).x_min,
@@ -201,9 +209,11 @@ class UnifiedDatapath extends Module {
     val emit = Wire(Valid(new ExtendedPipelineBundle(true)))
     emit := intake
 
-    when(!emit.valid) {
+    // printf(cf"${_time}: stage 10 intake is valid? ${intake.valid}\n")
+
+    when(!intake.valid) {
       emit.bits := 0.U.asTypeOf(emit.bits)
-    }.elsewhen(emit.bits.isTriangleOp) {}.otherwise {
+    }.elsewhen(intake.bits.isTriangleOp) {}.otherwise {
       def flip_intervals_if_dir_is_neg(
           c_out: Bits,
           d_out: Bits,
@@ -283,6 +293,8 @@ class UnifiedDatapath extends Module {
 
         isIntersect_intermediate(box_idx) := comp_tmin_tmax.io.lt
       }
+      // printf(cf"${_time}: tpmin is ${emit.bits.t_min}, tpmax is ${emit.bits.t_max}\n")
+      // printf(cf"${_time}: tmin_intermediate is ${tmin_intermediate}\n")
 
       val tmin_but_substitute_non_intersect_with_PInf =
         tmin_intermediate.zip(isIntersect_intermediate).map {
@@ -308,18 +320,14 @@ class UnifiedDatapath extends Module {
     emit
   })
 
-  // The all-containing bundle that runs through all stages of the unified
-  // pipeline. This is the conveyor belt between stages.
+  //////////////////
+  // STAGE REGISTERS
+  ///////////////////
+
+  // This is the conveyor belt between stages.
   val stage_registers = Reg(
     Vec(_stage_count, Valid(new ExtendedPipelineBundle(recorded_float = true)))
   )
-  // zero-th element is useless
-  stage_registers(0) := 0.U.asTypeOf(stage_registers(0))
-
-  // first element is useless too, because the first stage is "register input"
-  // stage, the values are still non-recorded float. See
-  // `stage_registers_1_actual` instead.
-  stage_registers(1) := 0.U.asTypeOf(stage_registers(0))
 
   // chain up the stages!
   // Either apply the specified transformation, or default identity function, on
@@ -329,6 +337,14 @@ class UnifiedDatapath extends Module {
       (x: Valid[ExtendedPipelineBundle]) => identity(x)
     )(stage_registers(idx - 1))
   }
+
+  // zero-th element is useless
+  stage_registers(0) := 0.U.asTypeOf(stage_registers(0))
+
+  // first element is useless too, because the first stage is "register input"
+  // stage, the values are still non-recorded float. See
+  // `stage_registers_1_actual` instead.
+  stage_registers(1) := 0.U.asTypeOf(stage_registers(0))
 
   // override the driver logic for stage_registers 1 and 2
   val stage_registers_1_actual = Reg(
@@ -352,7 +368,10 @@ class UnifiedDatapath extends Module {
     stage_registers_1_actual.bits.triangle
   )
 
+  ////////////////////////
   // TAP OUTPUT FROM LAST MEANINGFUL STAGE'S REGISTER
+  /////////////////////////
+
   out.bits := 0.U.asTypeOf((out.bits))
   out.valid := stage_registers(10).valid
   out.bits.isTriangleOp := stage_registers(10).bits.isTriangleOp

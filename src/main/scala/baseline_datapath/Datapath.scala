@@ -155,7 +155,9 @@ class Datapath extends Module {
       // TODO: handle exception flags!
     }
   }
-
+  // when(ShiftRegister(in.valid, 3)){
+  //   printf(cf"${_time}: aabb at stage 3 is ${geometries_shift_reg(3).aabb(0)}\n")
+  // }
   //
   // STAGE 4: Time intersection interval calculations for each axis plane
   //
@@ -205,6 +207,9 @@ class Datapath extends Module {
       _1 := fu.io.out
     // TODO: handle exception flags!
     }
+  }
+  when(ShiftRegister(in.valid, 4)) {
+    printf(cf"${_time}: tpmin at stage 4 is ${tp_min_4(0)}\n")
   }
 
   //
@@ -296,6 +301,7 @@ class Datapath extends Module {
     isIntersect_5(box_idx) := comp_tmin_tmax.io.lt
     tmin_out_rec_5(box_idx) := tmin
   }
+  // printf(cf"${_time}: tmin_out_rec_5 is ${tmin_out_rec_5}\n")
 
   //
   // STAGE 6: sort four boxes
