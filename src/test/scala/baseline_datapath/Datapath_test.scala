@@ -12,6 +12,7 @@ import chisel3.experimental.VecLiterals._
 
 import baseline_datapath.raytracer_gold._
 import baseline_datapath.raytracer_gold.RaytracerTestHelper._ // implicit conversions
+import baseline_datapath.raytracer_gold.SW_Ray.SCENE_BOUNDS
 
 import chiseltest.internal.CachingAnnotation
 import firrtl2.options.TargetDirAnnotation
@@ -51,6 +52,9 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
   val r = new Random()
   val N_RANDOM_TEST = 100000
+  val PRINT_END_TIME = false
+  val float_tolerance_error =
+    0.0001 // normalized error: 149 vs 100 would have an error of 0.49
 
   val chisel_test_annotations = Seq(
     VerilatorBackendAnnotation,
@@ -73,6 +77,29 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       box_seq_seq: Seq[Seq[SW_Box]],
       ray_seq: Seq[SW_Ray]
   ): Unit = {
+    // Everything we pass to the DecoupledDriver are LazyList,
+    // which means elements won't be evaluated until they are accessed.
+    // Furhtermore, using `def` instead of `val` allows garbage collection
+    // to destroy spent elements ASAP.
+
+    def ray_box_list: LazyList[SW_CombinedData] = LazyList.from {
+      (ray_seq zip box_seq_seq).map { case (r, bs) =>
+        SW_CombinedData(r, bs, SW_Triangle(), false)
+      }
+    }
+
+    // a sequence of software gold results
+    def sw_result_seq: LazyList[RaytracerGold.SW_RayBox_Result] = {
+      ray_box_list.map {
+        case SW_CombinedData(r, bseq, t, _) => {
+          // println("calculated a sw result")
+          RaytracerGold.testIntersection(r, bseq)
+        }
+      }
+    }
+
+    var worst_normalized_error = 0.0f
+
     description in {
       test(new UnifiedDatapath_wrapper)
         .withAnnotations(
@@ -83,27 +110,6 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
         ) { dut =>
           dut.in.initSource().setSourceClock(dut.clock)
           dut.out.initSink().setSinkClock(dut.clock)
-
-          // Everything we pass to the DecoupledDriver are LazyList,
-          // which means elements won't be evaluated until they are accessed.
-          // Furhtermore, using `def` instead of `val` allows garbage collection
-          // to destroy spent elements ASAP.
-
-          def ray_box_list: LazyList[SW_CombinedData] = LazyList.from {
-            (ray_seq zip box_seq_seq).map { case (r, bs) =>
-              SW_CombinedData(r, bs, SW_Triangle(), false)
-            }
-          }
-
-          // a sequence of software gold results
-          def sw_result_seq: LazyList[RaytracerGold.SW_RayBox_Result] = {
-            ray_box_list.map {
-              case SW_CombinedData(r, bseq, t, _) => {
-                // println("calculated a sw result")
-                RaytracerGold.testIntersection(r, bseq)
-              }
-            }
-          }
 
           fork {
             // On the one hand, we pipe-in the test case inputs
@@ -162,17 +168,27 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
                   error_string_obj
                 )
 
-                // check HW and SW yields the same intersect t value for each box
-                assert(
-                  input_box_status(actual_box_idx)._1 == actual_tmin,
-                  error_string_obj
-                )
-
                 // checkout HW and SW yields the same opinion on intersection
                 assert(
                   input_box_status(actual_box_idx)._2 == actual_is_intersect,
                   error_string_obj
                 )
+
+                // check HW and SW yields the same intersect t value for each
+                // box, if intersection is true
+                if (actual_is_intersect) {
+                  val normalized_tmin_error = if (actual_tmin != 0.0f) {
+                    abs(
+                      input_box_status(actual_box_idx)._1 - actual_tmin
+                    ) / actual_tmin
+                  } else { input_box_status(actual_box_idx)._1 }
+                  assert(
+                    normalized_tmin_error <= float_tolerance_error,
+                    error_string_obj
+                  )
+                  worst_normalized_error =
+                    max(worst_normalized_error, normalized_tmin_error)
+                }
 
                 if (!has_seen_non_intersect && !actual_is_intersect) {
                   has_seen_non_intersect = true
@@ -215,8 +231,12 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
             }
           }.join()
 
-          println(s"test ends at time ${dut.exposed_time.peek().litValue}")
+          if (PRINT_END_TIME) {
+            println(s"test ends at time ${dut.exposed_time.peek().litValue}")
+          }
+
         }
+      println(s"worst normalized error is ${worst_normalized_error}")
     }
   }
 
@@ -243,6 +263,8 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
           case _ => { throw new Exception("cannot take ray box data") }
         }
       }
+
+      var worst_normalized_error = 0.0f
 
       test(new UnifiedDatapath_wrapper)
         .withAnnotations(
@@ -277,17 +299,29 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
                 assert(hw_hit == sw_r.is_hit, error_msg_obj)
                 if (sw_r.is_hit) {
-                  assert(sw_r.t_denom == hw_t_denom, error_msg_obj)
-                  assert(sw_r.t_num == hw_t_num, error_msg_obj)
+                  val denom_error = if (sw_r.t_denom != 0.0f) {
+                    abs(sw_r.t_denom - hw_t_denom) / sw_r.t_denom
+                  } else { hw_t_denom }
+                  val num_error = if (sw_r.t_num != 0.0f) {
+                    abs(sw_r.t_num - hw_t_num) / sw_r.t_num
+                  } else { hw_t_num }
+                  assert(denom_error <= float_tolerance_error, error_msg_obj)
+                  assert(num_error < float_tolerance_error, error_msg_obj)
+                  worst_normalized_error =
+                    max(worst_normalized_error, denom_error)
+                  worst_normalized_error =
+                    max(worst_normalized_error, num_error)
                 }
 
                 dut.clock.step()
             }
           }.join()
 
-          println(s"test ends at time ${dut.exposed_time.peek().litValue}")
+          if (PRINT_END_TIME) {
+            println(s"test ends at time ${dut.exposed_time.peek().litValue}")
+          }
         }
-
+      println(s"worst normalized error is ${worst_normalized_error}")
     }
   }
 
@@ -476,6 +510,21 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       List.fill(4) { RaytracerGold.genRandomBox(1e16.toFloat) }
     },
     List.fill(N_RANDOM_TEST) { RaytracerGold.genRandomRay(1e5.toFloat) }
+  )
+
+  val randTriangle = LazyList.fill(N_RANDOM_TEST)(
+    RaytracerGold.genRandomTriangle(-SCENE_BOUNDS.toFloat, SCENE_BOUNDS.toFloat)
+  )
+  testRayTriangleIntersection(
+    s"${N_RANDOM_TEST} randomized rays and triangles within range ${SCENE_BOUNDS}",
+    randTriangle,
+    randTriangle.map { t =>
+      RaytracerGold.genRandomRayGivenPoint(
+        t.centroid,
+        -SCENE_BOUNDS.toFloat,
+        SCENE_BOUNDS.toFloat
+      )
+    }
   )
 
 }

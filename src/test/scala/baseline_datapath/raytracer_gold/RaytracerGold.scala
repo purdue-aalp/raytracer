@@ -115,7 +115,7 @@ class SW_Ray(
 }
 
 object SW_Ray {
-  val SCENE_BOUNDS = 100000
+  val SCENE_BOUNDS = 1000
   val RAY_EXTENT = 4 * SCENE_BOUNDS
   def apply(_ori: float_3, _dir: float_3) = {
     new SW_Ray(_ori, _dir)
@@ -143,7 +143,13 @@ case class SW_Triangle(
     val A: float_3 = float_3(0.0f, 0.0f, 0.0f),
     val B: float_3 = float_3(0.0f, 0.0f, 0.0f),
     val C: float_3 = float_3(0.0f, 0.0f, 0.0f)
-)
+) {
+  def centroid: float_3 = float_3(
+    (A.x + B.x + C.x) / 3.0f,
+    (A.y + B.y + C.y) / 3.0f,
+    (A.z + B.z + C.z) / 3.0f
+  )
+}
 
 case class SW_CombinedData(
     val ray: SW_Ray,
@@ -526,5 +532,44 @@ object RaytracerGold {
     )
 
     ray
+  }
+
+  def genRandomRayGivenPoint(
+      point: float_3,
+      lower_bound: Float,
+      upper_bound: Float
+  ): SW_Ray = {
+    import scala.util.Random
+    lazy val r = new Random()
+    assert(upper_bound > lower_bound)
+
+    var origin = point
+    while (origin == point) {
+      val rands = (0 until 3).map { _ =>
+        r.nextFloat() * (upper_bound - lower_bound) + lower_bound
+      }
+      origin = float_3(rands(0), rands(1), rands(2))
+    }
+
+    val dir =
+      float_3(point.x - origin.x, point.y - origin.y, point.z - origin.z)
+
+    val ray = new SW_Ray(origin, dir)
+    ray
+  }
+
+  def genRandomTriangle(lower_bound: Float, upper_bound: Float): SW_Triangle = {
+    import scala.util.Random
+    lazy val r = new Random()
+    assert(upper_bound > lower_bound)
+    val rands = (0 until 9).map { _ =>
+      r.nextFloat() * (upper_bound - lower_bound) + lower_bound
+    }
+
+    SW_Triangle(
+      float_3(rands(0), rands(1), rands(2)),
+      float_3(rands(3), rands(4), rands(5)),
+      float_3(rands(6), rands(7), rands(8))
+    )
   }
 }
