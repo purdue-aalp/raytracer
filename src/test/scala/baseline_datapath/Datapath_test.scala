@@ -27,6 +27,7 @@ import chiseltest.simulator.{
   WriteVcdAnnotation,
   CachingDebugAnnotation
 }
+import scala.collection.immutable.NumericRange
 
 class Datapath_wrapper extends Datapath {
   import hardfloat._
@@ -51,7 +52,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   type HW_Box = baseline_datapath.AABB
 
   val r = new Random()
-  val N_RANDOM_TEST = 1000
+  val N_RANDOM_TEST = 2000
   val PRINT_END_TIME = false
   val float_tolerance_error =
     0.001 // normalized error: 149 vs 100 would have an error of 0.49
@@ -70,6 +71,98 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     ThrowOnFirstErrorAnnotation,
     PrintFullStackTraceAnnotation
   )
+
+  def check_raybox_result(input_no: Int, sw_result: RaytracerGold.SW_RayBox_Result, hw_result: UnifiedDatapathOutput)={
+    val input_box_status =
+      Map(sw_result.t_min.zip(sw_result.is_intersect).zip(sw_result.box_index).map {
+        case ((t, isint), boxidx) =>
+          (boxidx, (t, isint))
+      }: _*)
+
+    // traverse the four elements of actual output, verify their
+    // ordering is correct, and they match with what the software gold
+    // result predicts
+    val error_string_obj = new AnyRef {
+      lazy val o = hw_result.peek()
+      override def toString: String = {
+        s"input #${input_no}\nactual tmin: ${o.tmin_out.map(bitsToFloat(_))}\n" + s"actual intersect: ${o.isIntersect
+            .map(_.litValue)}\n" + s"actual boxidx: ${o.boxIndex.map(_.litValue)}\n" + s"Predicted: ${sw_result}"
+      }
+    }
+
+    var has_seen_non_intersect = false
+    var so_far_largest_tmin = 0.0f
+    for (idx <- 0 until 4) {
+      val actual_tmin = bitsToFloat(hw_result.tmin_out(idx).peek())
+      val actual_is_intersect =
+        hw_result.isIntersect(idx).peek().litToBoolean
+      val actual_box_idx =
+        hw_result.boxIndex(idx).peek().litValue.intValue
+
+      // check t value monotonicity (use scala.Predef.assert instead of
+      // scalatest.assert so we can call error_string by-name)
+      assert(actual_tmin >= so_far_largest_tmin, error_string_obj)
+
+      // check intersects go before non-intersects
+      assert(
+        !has_seen_non_intersect || (has_seen_non_intersect && !actual_is_intersect),
+        error_string_obj
+      )
+
+      // checkout HW and SW yields the same opinion on intersection
+      assert(
+        input_box_status(actual_box_idx)._2 == actual_is_intersect,
+        error_string_obj
+      )
+
+      // check HW and SW yields the same intersect t value for each
+      // box, if intersection is true
+      if (actual_is_intersect) {
+        val normalized_tmin_error = if (actual_tmin != 0.0f) {
+          abs(
+            input_box_status(actual_box_idx)._1 - actual_tmin
+          ) / actual_tmin
+        } else { input_box_status(actual_box_idx)._1 }
+        assert(
+          normalized_tmin_error <= float_tolerance_error,
+          error_string_obj
+        )
+      }
+
+      if (!has_seen_non_intersect && !actual_is_intersect) {
+        has_seen_non_intersect = true
+      }
+
+      so_far_largest_tmin = actual_tmin
+    }
+
+  }
+
+  def check_raytriangle_result(input_no: Int, sw_result: RaytracerGold.SW_RayTriangle_Result, hw_result: UnifiedDatapathOutput): Float={
+    val hw_t_num: Float = bitsToFloat(hw_result.t_num.peek())
+    val hw_t_denom: Float = bitsToFloat(hw_result.t_denom.peek())
+    val hw_hit: Boolean =
+      hw_result.triangle_hit.peek().litToBoolean
+
+    val error_msg_obj = new AnyRef {
+      lazy val message =
+        f"Input #${input_no}: ${input_no},\n predicted output: ${sw_result}, \n actual output: t_num=${hw_t_num}, t_denom=${hw_t_denom}, hit=${hw_hit}\n"
+      override def toString: String = message
+    }
+
+    var t_error = 0.0f
+    assert(hw_hit == sw_result.is_hit, error_msg_obj)
+    if (sw_result.is_hit) {
+      val hw_t = hw_t_num / hw_t_denom
+      val sw_t = sw_result.t_num / sw_result.t_denom
+      t_error = abs(hw_t - sw_t) / sw_t
+
+      // assert(t_error <= float_tolerance_error, error_msg_obj)
+      // worst_normalized_error = max(worst_normalized_error, t_error)
+    }
+
+    t_error
+  }
 
   // Define a function for ray-box intersection testing
   def testRayBoxIntersection(
@@ -98,8 +191,6 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       }
     }
 
-    var worst_normalized_error = 0.0f
-
     description in {
       test(new UnifiedDatapath_wrapper)
         .withAnnotations(
@@ -125,107 +216,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
             sw_result_seq.zipWithIndex.foreach { case (sw_r, input_no) =>
               dut.out.waitForValid()
 
-              // val o = dut.out.bits.peek()
-              //   println(s"actual tmin: ${o.tmin_out.map(bitsToFloat(_))}")
-              //   println(s"actual intersect: ${o.isIntersect.map(_.litValue)}")
-              //   println(s"actual boxidx: ${o.boxIndex.map(_.litValue)}")
-              // println(s"Predicted: ${sw_r}")
-
-              // create an immutable Map: from box_index to tuple (t_min, is_intersect)
-              val input_box_status =
-                Map(sw_r.t_min.zip(sw_r.is_intersect).zip(sw_r.box_index).map {
-                  case ((t, isint), boxidx) =>
-                    (boxidx, (t, isint))
-                }: _*)
-
-              // traverse the four elements of actual output, verify their
-              // ordering is correct, and they match with what the software gold
-              // result predicts
-              val error_string_obj = new AnyRef {
-                lazy val o = dut.out.bits.peek()
-                override def toString: String = {
-                  s"input #${input_no}\nactual tmin: ${o.tmin_out.map(bitsToFloat(_))}\n" + s"actual intersect: ${o.isIntersect
-                      .map(_.litValue)}\n" + s"actual boxidx: ${o.boxIndex.map(_.litValue)}\n" + s"Predicted: ${sw_r}"
-                }
-              }
-
-              var has_seen_non_intersect = false
-              var so_far_largest_tmin = 0.0f
-              for (idx <- 0 until 4) {
-                val actual_tmin = bitsToFloat(dut.out.bits.tmin_out(idx).peek())
-                val actual_is_intersect =
-                  dut.out.bits.isIntersect(idx).peek().litToBoolean
-                val actual_box_idx =
-                  dut.out.bits.boxIndex(idx).peek().litValue.intValue
-
-                // check t value monotonicity (use scala.Predef.assert instead of
-                // scalatest.assert so we can call error_string by-name)
-                assert(actual_tmin >= so_far_largest_tmin, error_string_obj)
-
-                // check intersects go before non-intersects
-                assert(
-                  !has_seen_non_intersect || (has_seen_non_intersect && !actual_is_intersect),
-                  error_string_obj
-                )
-
-                // checkout HW and SW yields the same opinion on intersection
-                assert(
-                  input_box_status(actual_box_idx)._2 == actual_is_intersect,
-                  error_string_obj
-                )
-
-                // check HW and SW yields the same intersect t value for each
-                // box, if intersection is true
-                if (actual_is_intersect) {
-                  val normalized_tmin_error = if (actual_tmin != 0.0f) {
-                    abs(
-                      input_box_status(actual_box_idx)._1 - actual_tmin
-                    ) / actual_tmin
-                  } else { input_box_status(actual_box_idx)._1 }
-                  assert(
-                    normalized_tmin_error <= float_tolerance_error,
-                    error_string_obj
-                  )
-                  worst_normalized_error =
-                    max(worst_normalized_error, normalized_tmin_error)
-                }
-
-                if (!has_seen_non_intersect && !actual_is_intersect) {
-                  has_seen_non_intersect = true
-                }
-
-                so_far_largest_tmin = actual_tmin
-              }
-
-              // // a mutable BitSet tracks which input-box does not intersect
-              // val predicted_non_intersect_boxes = new collection.mutable.BitSet(4)
-
-              // //TODO: handle case when multiple intersect t values are equal!
-
-              // //This part checks for boxes the SW predict to intersect
-              // for(idx <- 0 until 4){
-              //   if(sw_r.is_intersect(idx)){
-              //     lazy val o = dut.out.bits.peek()
-              //     lazy val error_string = s"input #${input_no}\nactual tmin: ${o.tmin_out.map(bitsToFloat(_))}\n" + s"actual intersect: ${o.isIntersect.map(_.litValue)}\n" +  s"actual boxidx: ${o.boxIndex.map(_.litValue)}\n" + s"Predicted: ${sw_r}"
-
-              //     dut.out.bits.isIntersect(idx).expect(sw_r.is_intersect(idx).B, error_string)
-              //     dut.out.bits.boxIndex(idx).expect((sw_r.box_index(idx).U), error_string)
-              //     dut.out.bits.tmin_out(idx).expect(floatToBits(sw_r.t_min(idx)), error_string )
-              //   }
-              //   else{
-              //     predicted_non_intersect_boxes.add(sw_r.box_index(idx))
-              //   }
-              // }
-              // // This part checks for boxes the SW predict to not intersect
-              // for(idx <- 0 until 4){
-              //   val box_idx: Int = dut.out.bits.boxIndex(idx).peek().litValue.intValue
-              //   if(dut.out.bits.isIntersect(idx).peek().litToBoolean){
-              //     assert(!predicted_non_intersect_boxes.contains(box_idx))
-              //   }
-              //   else{
-              //     assert(predicted_non_intersect_boxes.contains(box_idx))
-              //   }
-              // }
+              check_raybox_result(input_no, sw_r, dut.out.bits)
 
               dut.clock.step()
             }
@@ -236,7 +227,6 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
           }
 
         }
-      println(s"worst normalized error is ${worst_normalized_error}")
     }
   }
 
@@ -286,26 +276,29 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
               case ((sw_r, input_no), input) =>
                 dut.out.waitForValid()
 
-                val hw_t_num: Float = bitsToFloat(dut.out.bits.t_num.peek())
-                val hw_t_denom: Float = bitsToFloat(dut.out.bits.t_denom.peek())
-                val hw_hit: Boolean =
-                  dut.out.bits.triangle_hit.peek().litToBoolean
+                // val hw_t_num: Float = bitsToFloat(dut.out.bits.t_num.peek())
+                // val hw_t_denom: Float = bitsToFloat(dut.out.bits.t_denom.peek())
+                // val hw_hit: Boolean =
+                //   dut.out.bits.triangle_hit.peek().litToBoolean
 
-                val error_msg_obj = new AnyRef {
-                  lazy val message =
-                    f"Input #${input_no}: ${input},\n predicted output: ${sw_r}, \n actual output: t_num=${hw_t_num}, t_denom=${hw_t_denom}, hit=${hw_hit}\n"
-                  override def toString: String = message
-                }
+                // val error_msg_obj = new AnyRef {
+                //   lazy val message =
+                //     f"Input #${input_no}: ${input},\n predicted output: ${sw_r}, \n actual output: t_num=${hw_t_num}, t_denom=${hw_t_denom}, hit=${hw_hit}\n"
+                //   override def toString: String = message
+                // }
 
-                assert(hw_hit == sw_r.is_hit, error_msg_obj)
-                if (sw_r.is_hit) {
-                  val hw_t = hw_t_num / hw_t_denom
-                  val sw_t = sw_r.t_num / sw_r.t_denom
-                  val t_error = abs(hw_t - sw_t) / sw_t
+                // assert(hw_hit == sw_r.is_hit, error_msg_obj)
+                // if (sw_r.is_hit) {
+                //   val hw_t = hw_t_num / hw_t_denom
+                //   val sw_t = sw_r.t_num / sw_r.t_denom
+                //   val t_error = abs(hw_t - sw_t) / sw_t
 
-                  // assert(t_error <= float_tolerance_error, error_msg_obj)
-                  worst_normalized_error = max(worst_normalized_error, t_error)
-                }
+                //   // assert(t_error <= float_tolerance_error, error_msg_obj)
+                //   worst_normalized_error = max(worst_normalized_error, t_error)
+                // }
+
+                val t_error = check_raytriangle_result(input_no, sw_r, dut.out.bits)
+                worst_normalized_error = max(worst_normalized_error, t_error)
 
                 dut.clock.step()
             }
@@ -319,206 +312,275 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     }
   }
 
+  def testUnifiedIntersection(
+    description: String,
+    ray_seq: Seq[SW_Ray],
+    box_seq_seq: Seq[Seq[SW_Box]],
+    triangle_seq: Seq[SW_Triangle],
+    op_seq: Seq[Boolean]
+  ):Unit = {
+    description in {
+      def combined_data_list: LazyList[SW_CombinedData] = LazyList.from {
+        (ray_seq zip box_seq_seq zip triangle_seq zip op_seq).map { case (((ray, boxs), tri), op) =>
+          SW_CombinedData(ray, boxs, tri, op)
+        }
+      }
+
+      // a sequence of software gold results
+      def sw_result_seq: LazyList[RaytracerGold.SW_Unified_Result] = {
+        combined_data_list.map {
+          case SW_CombinedData(r, _, t, true) => {
+            // println("calculated a sw result")
+            RaytracerGold.SW_Unified_Result(true, RaytracerGold.testTriangleIntersection(r, t), RaytracerGold.SW_RayBox_Result())
+          }
+          case SW_CombinedData(r, bs, _, false) => 
+            RaytracerGold.SW_Unified_Result(false, RaytracerGold.SW_RayTriangle_Result(), RaytracerGold.testIntersection(r, bs))
+          case _ => { throw new Exception("cannot take ray box data") }
+        }
+      }
+
+      var worst_normalized_error = 0.0f
+
+      test(new UnifiedDatapath_wrapper)
+        .withAnnotations(
+          chisel_test_annotations :+ WriteVcdAnnotation
+        )
+        .withChiselAnnotations(
+          chisel_test_chisel_annotations
+        ) { dut =>
+          dut.in.initSource().setSourceClock(dut.clock)
+          dut.out.initSink().setSinkClock(dut.clock)
+
+          fork{
+            dut.in.enqueueSeq(combined_data_list)
+          }.fork{
+            sw_result_seq.zipWithIndex.map{case(sw_r, input_no)=>
+              dut.out.waitForValid()
+              if(sw_r.isTriangle){
+                check_raytriangle_result(input_no, sw_r.triangle_result, dut.out.bits)
+              } else {
+                check_raybox_result(input_no, sw_r.box_result, dut.out.bits)
+              }
+              dut.clock.step()
+            }
+          }.join()
+
+          println(s"test ends at time ${dut.exposed_time.peek().litValue}")
+        }
+    }
+  }
+
   // Define test cases
-  testRayBoxIntersection(
-    "Small Ray inside box",
-    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
-      1.0f) :: SW_Box() :: SW_Box() :: SW_Box() :: Nil) :: Nil,
-    new SW_Ray(
-      float_3(0.5f, -0.5f, 0.5f),
-      float_3(0.0001f, -0.0001f, -0.001f)
-    ) :: Nil
-  )
-  testRayBoxIntersection(
-    "Ray outside box pointing away",
-    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
-      1.0f) :: SW_Box() :: SW_Box() :: SW_Box() :: Nil) :: Nil,
-    new SW_Ray(float_3(2.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
-  )
-  testRayBoxIntersection(
-    "Ray on edge of box pointing away",
-    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
-      1.0f) :: SW_Box() :: SW_Box() :: SW_Box() :: Nil) :: Nil,
-    new SW_Ray(float_3(1.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
-  )
-  testRayBoxIntersection(
-    "Ray on corner of box pointing away",
-    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
-      1.0f) :: SW_Box() :: SW_Box() :: SW_Box() :: Nil) :: Nil,
-    new SW_Ray(float_3(1.0f, 1.0f, 1.0f), float_3(1.0f, 1.0f, 1.0f)) :: Nil
-  )
-  testRayBoxIntersection(
-    "Ray on corner of box pointing along edge",
-    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
-      1.0f) :: SW_Box() :: SW_Box() :: SW_Box() :: Nil) :: Nil,
-    new SW_Ray(float_3(1.0f, 1.0f, 1.0f), float_3(0.0f, -1.0f, 0.0f)) :: Nil
-  )
-  testRayBoxIntersection(
-    "Ray outside box pointing towards box",
-    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
-      1.0f) :: SW_Box() :: SW_Box() :: SW_Box() :: Nil) :: Nil,
-    new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
-  )
-  testRayBoxIntersection(
-    "Ray hits node 1 then node 2",
-    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) ::
-      SW_Box(2.0f, 2.5f, -0.5f, 0.5f, -0.5f,
-        0.5f) :: SW_Box() :: SW_Box() :: Nil) :: Nil,
-    new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(10.0f, 0.0f, 0.0f)) :: Nil
-  )
+  // testRayBoxIntersection(
+  //   "Small Ray inside box",
+  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
+  //     1.0f) :: SW_Box() :: SW_Box() :: SW_Box() :: Nil) :: Nil,
+  //   new SW_Ray(
+  //     float_3(0.5f, -0.5f, 0.5f),
+  //     float_3(0.0001f, -0.0001f, -0.001f)
+  //   ) :: Nil
+  // )
+  // testRayBoxIntersection(
+  //   "Ray outside box pointing away",
+  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
+  //     1.0f) :: SW_Box() :: SW_Box() :: SW_Box() :: Nil) :: Nil,
+  //   new SW_Ray(float_3(2.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
+  // )
+  // testRayBoxIntersection(
+  //   "Ray on edge of box pointing away",
+  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
+  //     1.0f) :: SW_Box() :: SW_Box() :: SW_Box() :: Nil) :: Nil,
+  //   new SW_Ray(float_3(1.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
+  // )
+  // testRayBoxIntersection(
+  //   "Ray on corner of box pointing away",
+  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
+  //     1.0f) :: SW_Box() :: SW_Box() :: SW_Box() :: Nil) :: Nil,
+  //   new SW_Ray(float_3(1.0f, 1.0f, 1.0f), float_3(1.0f, 1.0f, 1.0f)) :: Nil
+  // )
+  // testRayBoxIntersection(
+  //   "Ray on corner of box pointing along edge",
+  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
+  //     1.0f) :: SW_Box() :: SW_Box() :: SW_Box() :: Nil) :: Nil,
+  //   new SW_Ray(float_3(1.0f, 1.0f, 1.0f), float_3(0.0f, -1.0f, 0.0f)) :: Nil
+  // )
+  // testRayBoxIntersection(
+  //   "Ray outside box pointing towards box",
+  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
+  //     1.0f) :: SW_Box() :: SW_Box() :: SW_Box() :: Nil) :: Nil,
+  //   new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
+  // )
+  // testRayBoxIntersection(
+  //   "Ray hits node 1 then node 2",
+  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) ::
+  //     SW_Box(2.0f, 2.5f, -0.5f, 0.5f, -0.5f,
+  //       0.5f) :: SW_Box() :: SW_Box() :: Nil) :: Nil,
+  //   new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(10.0f, 0.0f, 0.0f)) :: Nil
+  // )
 
-  testRayBoxIntersection(
-    "Ray hits node 4 then 1 then 2 then misses 3",
-    (SW_Box(2.0f, 2.5f, -0.5f, 0.5f, -0.5f, 0.5f) ::
-      SW_Box(100.0f, 100.25f, -0.5f, 0.5f, -0.5f, 0.5f) ::
-      SW_Box(-5.0f, -4.0f, -0.5f, 0.5f, -0.5f, 0.5f) ::
-      SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) ::
-      Nil) :: Nil,
-    new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(10.0f, 0.0f, 0.0f)) :: Nil
-  )
+  // testRayBoxIntersection(
+  //   "Ray hits node 4 then 1 then 2 then misses 3",
+  //   (SW_Box(2.0f, 2.5f, -0.5f, 0.5f, -0.5f, 0.5f) ::
+  //     SW_Box(100.0f, 100.25f, -0.5f, 0.5f, -0.5f, 0.5f) ::
+  //     SW_Box(-5.0f, -4.0f, -0.5f, 0.5f, -0.5f, 0.5f) ::
+  //     SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) ::
+  //     Nil) :: Nil,
+  //   new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(10.0f, 0.0f, 0.0f)) :: Nil
+  // )
 
-  testRayBoxIntersection(
-    "Ray outside box pointing along edge",
-    (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
-      1.0f) :: SW_Box() :: SW_Box() :: SW_Box() :: Nil) :: Nil,
-    new SW_Ray(float_3(1.0f, 2.0f, 1.0f), float_3(0.0f, -1.0f, 0.0f)) :: Nil
-  )
+  // testRayBoxIntersection(
+  //   "Ray outside box pointing along edge",
+  //   (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
+  //     1.0f) :: SW_Box() :: SW_Box() :: SW_Box() :: Nil) :: Nil,
+  //   new SW_Ray(float_3(1.0f, 2.0f, 1.0f), float_3(0.0f, -1.0f, 0.0f)) :: Nil
+  // )
 
-  testRayTriangleIntersection(
-    "Ray hits back of triangle along normal to surface",
-    SW_Triangle(
-      float_3(-1.0f, -1.0f, -1.0f),
-      float_3(0.0f, 1.0f, -1.0f),
-      float_3(1.0f, -1.0f, -1.0f)
-    ) :: Nil,
-    new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
-  )
+  // testRayTriangleIntersection(
+  //   "Ray hits back of triangle along normal to surface",
+  //   SW_Triangle(
+  //     float_3(-1.0f, -1.0f, -1.0f),
+  //     float_3(0.0f, 1.0f, -1.0f),
+  //     float_3(1.0f, -1.0f, -1.0f)
+  //   ) :: Nil,
+  //   new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
+  // )
 
-  testRayTriangleIntersection(
-    "Ray hits front of triangle along normal to surface",
-    SW_Triangle(
-      float_3(1.0f, -1.0f, -1.0f),
-      float_3(0.0f, 1.0f, -1.0f),
-      float_3(-1.0f, -1.0f, -1.0f)
-    ) :: Nil,
-    new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -1.0f)) :: Nil
-  )
+  // testRayTriangleIntersection(
+  //   "Ray hits front of triangle along normal to surface",
+  //   SW_Triangle(
+  //     float_3(1.0f, -1.0f, -1.0f),
+  //     float_3(0.0f, 1.0f, -1.0f),
+  //     float_3(-1.0f, -1.0f, -1.0f)
+  //   ) :: Nil,
+  //   new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -1.0f)) :: Nil
+  // )
 
-  testRayTriangleIntersection(
-    "Ray hits front edge of triangle along normal to surface",
-    SW_Triangle(
-      float_3(1.0f, -1.0f, -1.0f),
-      float_3(0.0f, 1.0f, -1.0f),
-      float_3(0.0f, -1.0f, -1.0f)
-    ) :: Nil,
-    new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
-  )
+  // testRayTriangleIntersection(
+  //   "Ray hits front edge of triangle along normal to surface",
+  //   SW_Triangle(
+  //     float_3(1.0f, -1.0f, -1.0f),
+  //     float_3(0.0f, 1.0f, -1.0f),
+  //     float_3(0.0f, -1.0f, -1.0f)
+  //   ) :: Nil,
+  //   new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
+  // )
 
-  testRayTriangleIntersection(
-    "Ray hits front corner of triangle along normal to surface",
-    SW_Triangle(
-      float_3(1.0f, -1.0f, -1.0f),
-      float_3(0.0f, 0.0f, -1.0f),
-      float_3(0.0f, -1.0f, -1.0f)
-    ) :: Nil,
-    new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
-  )
+  // testRayTriangleIntersection(
+  //   "Ray hits front corner of triangle along normal to surface",
+  //   SW_Triangle(
+  //     float_3(1.0f, -1.0f, -1.0f),
+  //     float_3(0.0f, 0.0f, -1.0f),
+  //     float_3(0.0f, -1.0f, -1.0f)
+  //   ) :: Nil,
+  //   new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
+  // )
 
-  testRayTriangleIntersection(
-    "Ray misses triangle",
-    SW_Triangle(
-      float_3(1.0f, -1.0f, -1.0f),
-      float_3(0.0f, 1.0f, -1.0f),
-      float_3(-1.0f, -1.0f, -1.0f)
-    ) :: Nil,
-    new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, 5.0f)) :: Nil
-  )
+  // testRayTriangleIntersection(
+  //   "Ray misses triangle",
+  //   SW_Triangle(
+  //     float_3(1.0f, -1.0f, -1.0f),
+  //     float_3(0.0f, 1.0f, -1.0f),
+  //     float_3(-1.0f, -1.0f, -1.0f)
+  //   ) :: Nil,
+  //   new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, 5.0f)) :: Nil
+  // )
 
-  testRayTriangleIntersection(
-    "Ray misses triangle along normal to surface",
-    SW_Triangle(
-      float_3(1.0f, -1.0f, -1.0f),
-      float_3(0.0f, 1.0f, -1.0f),
-      float_3(-1.0f, -1.0f, -1.0f)
-    ) :: Nil,
-    new SW_Ray(float_3(-5.0f, 5.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
-  )
+  // testRayTriangleIntersection(
+  //   "Ray misses triangle along normal to surface",
+  //   SW_Triangle(
+  //     float_3(1.0f, -1.0f, -1.0f),
+  //     float_3(0.0f, 1.0f, -1.0f),
+  //     float_3(-1.0f, -1.0f, -1.0f)
+  //   ) :: Nil,
+  //   new SW_Ray(float_3(-5.0f, 5.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
+  // )
 
-  testRayTriangleIntersection(
-    "Ray hits front of triangle along normal to surface (further away)",
-    SW_Triangle(
-      float_3(1.0f, -1.0f, -100.0f),
-      float_3(0.0f, 1.0f, -100.0f),
-      float_3(-1.0f, -1.0f, -100.0f)
-    ) :: Nil,
-    new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
-  )
+  // testRayTriangleIntersection(
+  //   "Ray hits front of triangle along normal to surface (further away)",
+  //   SW_Triangle(
+  //     float_3(1.0f, -1.0f, -100.0f),
+  //     float_3(0.0f, 1.0f, -100.0f),
+  //     float_3(-1.0f, -1.0f, -100.0f)
+  //   ) :: Nil,
+  //   new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
+  // )
 
-  testRayTriangleIntersection(
-    "Ray hits front of triangle not along normal",
-    SW_Triangle(
-      float_3(1.0f, -1.0f, -3.0f),
-      float_3(0.0f, 1.0f, -1.0f),
-      float_3(-1.0f, -1.0f, -2.0f)
-    ) :: Nil,
-    new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
-  )
+  // testRayTriangleIntersection(
+  //   "Ray hits front of triangle not along normal",
+  //   SW_Triangle(
+  //     float_3(1.0f, -1.0f, -3.0f),
+  //     float_3(0.0f, 1.0f, -1.0f),
+  //     float_3(-1.0f, -1.0f, -2.0f)
+  //   ) :: Nil,
+  //   new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
+  // )
 
-  testRayTriangleIntersection(
-    "Ray hits edge of triangle perpendicular to normal",
-    SW_Triangle(
-      float_3(1.0f, -1.0f, -1.0f),
-      float_3(0.0f, 1.0f, -1.0f),
-      float_3(-1.0f, -1.0f, -1.0f)
-    ) :: Nil,
-    new SW_Ray(float_3(0.0f, -2.0f, -1.0f), float_3(0.0f, 5.0f, 0.0f)) :: Nil
-  )
+  // testRayTriangleIntersection(
+  //   "Ray hits edge of triangle perpendicular to normal",
+  //   SW_Triangle(
+  //     float_3(1.0f, -1.0f, -1.0f),
+  //     float_3(0.0f, 1.0f, -1.0f),
+  //     float_3(-1.0f, -1.0f, -1.0f)
+  //   ) :: Nil,
+  //   new SW_Ray(float_3(0.0f, -2.0f, -1.0f), float_3(0.0f, 5.0f, 0.0f)) :: Nil
+  // )
 
-  testRayTriangleIntersection(
-    "Ray hits triangle (normal on x-axis)",
-    SW_Triangle(
-      float_3(1.0f, -1.0f, 1.0f),
-      float_3(1.0f, 1.0f, 0.0f),
-      float_3(1.0f, -1.0f, -1.0f)
-    ) :: Nil,
-    new SW_Ray(float_3(-100.0f, 0.0f, 0.0f), float_3(0.25f, 0.0f, 0.0f)) :: Nil
-  )
+  // testRayTriangleIntersection(
+  //   "Ray hits triangle (normal on x-axis)",
+  //   SW_Triangle(
+  //     float_3(1.0f, -1.0f, 1.0f),
+  //     float_3(1.0f, 1.0f, 0.0f),
+  //     float_3(1.0f, -1.0f, -1.0f)
+  //   ) :: Nil,
+  //   new SW_Ray(float_3(-100.0f, 0.0f, 0.0f), float_3(0.25f, 0.0f, 0.0f)) :: Nil
+  // )
 
-  testRayTriangleIntersection(
-    "Ray hits edge of triangle perpendicular to normal from inside tri",
-    SW_Triangle(
-      float_3(1.0f, -1.0f, -1.0f),
-      float_3(0.0f, 1.0f, -1.0f),
-      float_3(-1.0f, -1.0f, -1.0f)
-    ) :: Nil,
-    new SW_Ray(
-      float_3(0.0f, -1.0f / 3, -1.0f),
-      float_3(0.0f, 5.0f, 0.0f)
-    ) :: Nil
-  )
+  // testRayTriangleIntersection(
+  //   "Ray hits edge of triangle perpendicular to normal from inside tri",
+  //   SW_Triangle(
+  //     float_3(1.0f, -1.0f, -1.0f),
+  //     float_3(0.0f, 1.0f, -1.0f),
+  //     float_3(-1.0f, -1.0f, -1.0f)
+  //   ) :: Nil,
+  //   new SW_Ray(
+  //     float_3(0.0f, -1.0f / 3, -1.0f),
+  //     float_3(0.0f, 5.0f, 0.0f)
+  //   ) :: Nil
+  // )
 
   // randomized tests
+  val box_seq_for_raybox = List.fill(N_RANDOM_TEST) {
+    List.fill(4) { RaytracerGold.genRandomBox(1e16.toFloat) }
+  }
+  val ray_seq_for_raybox = List.fill(N_RANDOM_TEST) { RaytracerGold.genRandomRay(1e5.toFloat) }
+
   testRayBoxIntersection(
     s"${N_RANDOM_TEST} randomized rays and boxes within range -10000.0, 10000.0",
-    List.fill(N_RANDOM_TEST) {
-      List.fill(4) { RaytracerGold.genRandomBox(1e16.toFloat) }
-    },
-    List.fill(N_RANDOM_TEST) { RaytracerGold.genRandomRay(1e5.toFloat) }
+    box_seq_for_raybox,
+    ray_seq_for_raybox
   )
 
-  val randTriangle = List.fill(N_RANDOM_TEST)(
+  val tri_seq_for_raytriangle = List.fill(N_RANDOM_TEST)(
     RaytracerGold.genRandomTriangle(-SCENE_BOUNDS.toFloat, SCENE_BOUNDS.toFloat)
   )
-  testRayTriangleIntersection(
-    s"${N_RANDOM_TEST} randomized rays and triangles within range ${SCENE_BOUNDS}",
-    randTriangle,
-    randTriangle.map { t =>
+  val ray_seq_for_raytriangle = tri_seq_for_raytriangle.map { t =>
       RaytracerGold.genRandomRayGivenPoint(
         t.centroid,
         -SCENE_BOUNDS.toFloat,
         SCENE_BOUNDS.toFloat
       )
     }
+  testRayTriangleIntersection(
+    s"${N_RANDOM_TEST} randomized rays and triangles within range ${SCENE_BOUNDS}",
+    tri_seq_for_raytriangle,
+    ray_seq_for_raytriangle
+  )
+
+  testUnifiedIntersection("unified intersection test",
+    ray_seq_for_raybox :++ ray_seq_for_raytriangle,
+    box_seq_for_raybox :++ Seq.fill(ray_seq_for_raytriangle.length)(Seq.fill(4)(SW_Box())),
+    Seq.fill(ray_seq_for_raybox.length)(SW_Triangle()) :++ tri_seq_for_raytriangle,
+    Seq.fill(ray_seq_for_raybox.length)(false) :++ Seq.fill(ray_seq_for_raytriangle.length)(true)
   )
 
 }

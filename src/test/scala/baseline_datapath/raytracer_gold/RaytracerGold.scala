@@ -399,9 +399,9 @@ object RaytracerGold {
   }
 
   case class SW_RayBox_Result(
-      val t_min: Seq[Float],
-      val is_intersect: Seq[Boolean],
-      val box_index: Seq[Int]
+      val t_min: Seq[Float] = Nil,
+      val is_intersect: Seq[Boolean] = Nil,
+      val box_index: Seq[Int] = Nil
   )
 
   // Non-intersections are marked as PositiveInfinity
@@ -491,6 +491,12 @@ object RaytracerGold {
 
     result
   }
+
+  case class SW_Unified_Result(
+    val isTriangle: Boolean,
+    val triangle_result: SW_RayTriangle_Result,
+    val box_result: SW_RayBox_Result
+  )
 
   /** Generate a randomized AABB given the range -range <= x_min, x_max, y_min,
     * y_max, z_min, z_max <= range
