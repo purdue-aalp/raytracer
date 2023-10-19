@@ -41,7 +41,8 @@ class Datapath_wrapper extends Datapath {
   // val exposed_tmax_3d = expose(Float3ConvertRecFNtoFN(tmax_3d))
 }
 
-class UnifiedDatapath_wrapper extends UnifiedDatapath {
+class UnifiedDatapath_wrapper(use_stage_submodule: Boolean)
+    extends UnifiedDatapath(submodule_for_stage = use_stage_submodule) {
   val exposed_time = expose(_time)
 }
 
@@ -56,12 +57,17 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   val PRINT_END_TIME = false
   val float_tolerance_error =
     0.001 // normalized error: 149 vs 100 would have an error of 0.49
+  val use_stage_submodule = false
 
   val chisel_test_annotations = Seq(
     VerilatorBackendAnnotation,
     CachingAnnotation,
     // CachingDebugAnnotation,
-    TargetDirAnnotation("cached_verilator_backend/Datapath"),
+    TargetDirAnnotation(
+      if (use_stage_submodule)
+        "cached_verilator_backend/Datapath_stage_submodule"
+      else "cached_verilator_backend/Datapath_monolithic"
+    ),
     // WriteVcdAnnotation,
     VerilatorCFlags(Seq("-O3", "-march=native")),
     VerilatorLinkFlags(Seq("-O3", "-march=native")),
@@ -72,12 +78,20 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     PrintFullStackTraceAnnotation
   )
 
-  def check_raybox_result(input_no: Int, sw_result: RaytracerGold.SW_RayBox_Result, hw_result: UnifiedDatapathOutput)={
+  def check_raybox_result(
+      input_no: Int,
+      sw_result: RaytracerGold.SW_RayBox_Result,
+      hw_result: UnifiedDatapathOutput
+  ) = {
     val input_box_status =
-      Map(sw_result.t_min.zip(sw_result.is_intersect).zip(sw_result.box_index).map {
-        case ((t, isint), boxidx) =>
-          (boxidx, (t, isint))
-      }: _*)
+      Map(
+        sw_result.t_min
+          .zip(sw_result.is_intersect)
+          .zip(sw_result.box_index)
+          .map { case ((t, isint), boxidx) =>
+            (boxidx, (t, isint))
+          }: _*
+      )
 
     // traverse the four elements of actual output, verify their
     // ordering is correct, and they match with what the software gold
@@ -138,7 +152,11 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
   }
 
-  def check_raytriangle_result(input_no: Int, sw_result: RaytracerGold.SW_RayTriangle_Result, hw_result: UnifiedDatapathOutput): Float={
+  def check_raytriangle_result(
+      input_no: Int,
+      sw_result: RaytracerGold.SW_RayTriangle_Result,
+      hw_result: UnifiedDatapathOutput
+  ): Float = {
     val hw_t_num: Float = bitsToFloat(hw_result.t_num.peek())
     val hw_t_denom: Float = bitsToFloat(hw_result.t_denom.peek())
     val hw_hit: Boolean =
@@ -192,7 +210,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     }
 
     description in {
-      test(new UnifiedDatapath_wrapper)
+      test(new UnifiedDatapath_wrapper(use_stage_submodule))
         .withAnnotations(
           chisel_test_annotations
         )
@@ -256,7 +274,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
       var worst_normalized_error = 0.0f
 
-      test(new UnifiedDatapath_wrapper)
+      test(new UnifiedDatapath_wrapper(use_stage_submodule))
         .withAnnotations(
           chisel_test_annotations
         )
@@ -297,7 +315,8 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
                 //   worst_normalized_error = max(worst_normalized_error, t_error)
                 // }
 
-                val t_error = check_raytriangle_result(input_no, sw_r, dut.out.bits)
+                val t_error =
+                  check_raytriangle_result(input_no, sw_r, dut.out.bits)
                 worst_normalized_error = max(worst_normalized_error, t_error)
 
                 dut.clock.step()
@@ -313,16 +332,17 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   }
 
   def testUnifiedIntersection(
-    description: String,
-    ray_seq: Seq[SW_Ray],
-    box_seq_seq: Seq[Seq[SW_Box]],
-    triangle_seq: Seq[SW_Triangle],
-    op_seq: Seq[Boolean]
-  ):Unit = {
+      description: String,
+      ray_seq: Seq[SW_Ray],
+      box_seq_seq: Seq[Seq[SW_Box]],
+      triangle_seq: Seq[SW_Triangle],
+      op_seq: Seq[Boolean]
+  ): Unit = {
     description in {
       def combined_data_list: LazyList[SW_CombinedData] = LazyList.from {
-        (ray_seq zip box_seq_seq zip triangle_seq zip op_seq).map { case (((ray, boxs), tri), op) =>
-          SW_CombinedData(ray, boxs, tri, op)
+        (ray_seq zip box_seq_seq zip triangle_seq zip op_seq).map {
+          case (((ray, boxs), tri), op) =>
+            SW_CombinedData(ray, boxs, tri, op)
         }
       }
 
@@ -331,17 +351,25 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
         combined_data_list.map {
           case SW_CombinedData(r, _, t, true) => {
             // println("calculated a sw result")
-            RaytracerGold.SW_Unified_Result(true, RaytracerGold.testTriangleIntersection(r, t), RaytracerGold.SW_RayBox_Result())
+            RaytracerGold.SW_Unified_Result(
+              true,
+              RaytracerGold.testTriangleIntersection(r, t),
+              RaytracerGold.SW_RayBox_Result()
+            )
           }
-          case SW_CombinedData(r, bs, _, false) => 
-            RaytracerGold.SW_Unified_Result(false, RaytracerGold.SW_RayTriangle_Result(), RaytracerGold.testIntersection(r, bs))
+          case SW_CombinedData(r, bs, _, false) =>
+            RaytracerGold.SW_Unified_Result(
+              false,
+              RaytracerGold.SW_RayTriangle_Result(),
+              RaytracerGold.testIntersection(r, bs)
+            )
           case _ => { throw new Exception("cannot take ray box data") }
         }
       }
 
       var worst_normalized_error = 0.0f
 
-      test(new UnifiedDatapath_wrapper)
+      test(new UnifiedDatapath_wrapper(use_stage_submodule))
         .withAnnotations(
           chisel_test_annotations :+ WriteVcdAnnotation
         )
@@ -351,13 +379,17 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
           dut.in.initSource().setSourceClock(dut.clock)
           dut.out.initSink().setSinkClock(dut.clock)
 
-          fork{
+          fork {
             dut.in.enqueueSeq(combined_data_list)
-          }.fork{
-            sw_result_seq.zipWithIndex.map{case(sw_r, input_no)=>
+          }.fork {
+            sw_result_seq.zipWithIndex.map { case (sw_r, input_no) =>
               dut.out.waitForValid()
-              if(sw_r.isTriangle){
-                check_raytriangle_result(input_no, sw_r.triangle_result, dut.out.bits)
+              if (sw_r.isTriangle) {
+                check_raytriangle_result(
+                  input_no,
+                  sw_r.triangle_result,
+                  dut.out.bits
+                )
               } else {
                 check_raybox_result(input_no, sw_r.box_result, dut.out.bits)
               }
@@ -552,7 +584,9 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   val box_seq_for_raybox = List.fill(N_RANDOM_TEST) {
     List.fill(4) { RaytracerGold.genRandomBox(1e16.toFloat) }
   }
-  val ray_seq_for_raybox = List.fill(N_RANDOM_TEST) { RaytracerGold.genRandomRay(1e5.toFloat) }
+  val ray_seq_for_raybox = List.fill(N_RANDOM_TEST) {
+    RaytracerGold.genRandomRay(1e5.toFloat)
+  }
 
   testRayBoxIntersection(
     s"${N_RANDOM_TEST} randomized rays and boxes within range -10000.0, 10000.0",
@@ -564,23 +598,30 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     RaytracerGold.genRandomTriangle(-SCENE_BOUNDS.toFloat, SCENE_BOUNDS.toFloat)
   )
   val ray_seq_for_raytriangle = tri_seq_for_raytriangle.map { t =>
-      RaytracerGold.genRandomRayGivenPoint(
-        t.centroid,
-        -SCENE_BOUNDS.toFloat,
-        SCENE_BOUNDS.toFloat
-      )
-    }
+    RaytracerGold.genRandomRayGivenPoint(
+      t.centroid,
+      -SCENE_BOUNDS.toFloat,
+      SCENE_BOUNDS.toFloat
+    )
+  }
   testRayTriangleIntersection(
     s"${N_RANDOM_TEST} randomized rays and triangles within range ${SCENE_BOUNDS}",
     tri_seq_for_raytriangle,
     ray_seq_for_raytriangle
   )
 
-  testUnifiedIntersection("unified intersection test",
+  testUnifiedIntersection(
+    "unified intersection test",
     ray_seq_for_raybox :++ ray_seq_for_raytriangle,
-    box_seq_for_raybox :++ Seq.fill(ray_seq_for_raytriangle.length)(Seq.fill(4)(SW_Box())),
-    Seq.fill(ray_seq_for_raybox.length)(SW_Triangle()) :++ tri_seq_for_raytriangle,
-    Seq.fill(ray_seq_for_raybox.length)(false) :++ Seq.fill(ray_seq_for_raytriangle.length)(true)
+    box_seq_for_raybox :++ Seq.fill(ray_seq_for_raytriangle.length)(
+      Seq.fill(4)(SW_Box())
+    ),
+    Seq.fill(ray_seq_for_raybox.length)(
+      SW_Triangle()
+    ) :++ tri_seq_for_raytriangle,
+    Seq.fill(ray_seq_for_raybox.length)(false) :++ Seq.fill(
+      ray_seq_for_raytriangle.length
+    )(true)
   )
 
 }

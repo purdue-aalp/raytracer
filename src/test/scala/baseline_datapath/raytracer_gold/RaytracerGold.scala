@@ -493,9 +493,9 @@ object RaytracerGold {
   }
 
   case class SW_Unified_Result(
-    val isTriangle: Boolean,
-    val triangle_result: SW_RayTriangle_Result,
-    val box_result: SW_RayBox_Result
+      val isTriangle: Boolean,
+      val triangle_result: SW_RayTriangle_Result,
+      val box_result: SW_RayBox_Result
   )
 
   /** Generate a randomized AABB given the range -range <= x_min, x_max, y_min,
