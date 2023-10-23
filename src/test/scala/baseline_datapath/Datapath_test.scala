@@ -202,10 +202,11 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     // a sequence of software gold results
     def sw_result_seq: LazyList[RaytracerGold.SW_RayBox_Result] = {
       ray_box_list.map {
-        case SW_CombinedData(r, bseq, t, _) => {
+        case SW_CombinedData(r, bseq, t, false) => {
           // println("calculated a sw result")
           RaytracerGold.testIntersection(r, bseq)
         }
+        case _ => throw new Exception("must be ray-box op!")
       }
     }
 
