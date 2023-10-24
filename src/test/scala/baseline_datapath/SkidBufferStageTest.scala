@@ -12,10 +12,15 @@ import chisel3.stage.{
   ThrowOnFirstErrorAnnotation
 }
 
+class ChainedSkidBufferStages extends Module{
+  
+}
+
 class SkidBufferStageTest extends AnyFreeSpec with ChiselScalatestTester {
   val r = new Random(420)
   val input_prob = 0.5f
   val output_prob = 0.5f
+  val SEQ_LENGTH = 1000
 
   val chisel_test_annotations = Seq(
     // VerilatorBackendAnnotation,
@@ -36,6 +41,8 @@ class SkidBufferStageTest extends AnyFreeSpec with ChiselScalatestTester {
     PrintFullStackTraceAnnotation
   )
 
+  val val_seq: List[Int] = List.from(0 until SEQ_LENGTH)
+
   "skidbuffer stage should pass through identical values from 0 to 1000 when both ends are free" in {
     test(new SkidBufferStage(UInt(10.W)))
       .withAnnotations(chisel_test_annotations)
@@ -43,7 +50,6 @@ class SkidBufferStageTest extends AnyFreeSpec with ChiselScalatestTester {
         dut.intake.initSource().setSourceClock(dut.clock)
         dut.emit.initSink().setSinkClock(dut.clock)
 
-        val val_seq: List[Int] = List.from(0 until 18)
         fork{
           dut.intake.enqueueSeq(val_seq.map(_.U(10.W)))
         }.fork{
@@ -59,22 +65,69 @@ class SkidBufferStageTest extends AnyFreeSpec with ChiselScalatestTester {
         dut.intake.initSource().setSourceClock(dut.clock)
         dut.emit.initSink().setSinkClock(dut.clock)
 
-        val val_seq: List[Int] = List.from(0 until 18)
         fork{
           dut.intake.enqueueSeq(val_seq.map(_.U(10.W)))
         }.fork{
           val_seq.foreach{idx => 
-             
-            println(s"output expects ${idx}")
+            dut.emit.ready.poke(false.B)
             while(r.nextFloat()<=output_prob){
-              dut.emit.ready.poke(false.B)
               dut.clock.step()
             } 
             
+            // println(s"output expects ${idx}")
             dut.emit.expectDequeue(idx.U(10.W))
-                
+          }  
+        }.join()
+      }
+  }
+
+  "skidbuffer stage should pass through identical values from 0 to 1000 when intake is throttled" in {
+    test(new SkidBufferStage(UInt(10.W)))
+      .withAnnotations(chisel_test_annotations)
+      .withChiselAnnotations(chisel_test_chisel_annotations) { dut =>
+        dut.intake.initSource().setSourceClock(dut.clock)
+        dut.emit.initSink().setSinkClock(dut.clock)
+
+        fork{
+          val_seq.foreach{idx => 
+            dut.intake.valid.poke(false.B)
+            while(r.nextFloat() <= input_prob){
+              dut.clock.step()
+            }  
+            // println(s"intake pokes ${idx}")
+            dut.intake.enqueue(idx.U(10.W))
           }
-          // dut.emit.expectDequeueSeq(val_seq.map(_.U(10.W)))    
+        }.fork{
+          dut.emit.expectDequeueSeq(val_seq.map(_.U(10.W))) 
+        }.join()
+      }
+  }
+
+  "skidbuffer stage should pass through identical values from 0 to 1000 when intake is throttled and emit is congested" in {
+    test(new SkidBufferStage(UInt(10.W)))
+      .withAnnotations(chisel_test_annotations)
+      .withChiselAnnotations(chisel_test_chisel_annotations) { dut =>
+        dut.intake.initSource().setSourceClock(dut.clock)
+        dut.emit.initSink().setSinkClock(dut.clock)
+
+        fork{
+          val_seq.foreach{idx => 
+            dut.intake.valid.poke(false.B)
+            while(r.nextFloat() <= input_prob){
+              dut.clock.step()
+            }  
+            // println(s"intake pokes ${idx}")
+            dut.intake.enqueue(idx.U(10.W))
+          }
+        }.fork{
+          val_seq.foreach{idx => 
+            dut.emit.ready.poke(false.B)
+            while(r.nextFloat()<=output_prob){
+              dut.clock.step()
+            } 
+            // println(s"output expects ${idx}")
+            dut.emit.expectDequeue(idx.U(10.W))
+          }  
         }.join()
       }
   }

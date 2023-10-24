@@ -56,7 +56,7 @@ class SkidBuffer[T <: Data](private val gen: T) extends Module{
         in.ready := true.B 
       }.elsewhen(in.valid && !out.ready){
         // state := SkidBufferState.Full
-        in.ready := false.B 
+        in.ready := true.B 
         skid_buffer.bits := in.bits 
         skid_buffer.valid := in.valid
       }.elsewhen(!in.valid && out.ready){
@@ -77,13 +77,15 @@ class SkidBuffer[T <: Data](private val gen: T) extends Module{
       }.elsewhen(!in.valid && out.ready){
         // state := SkidBufferState.Empty
         in.ready := true.B 
+        skid_buffer.bits := in.bits
+        skid_buffer.valid := in.valid
       }.elsewhen(!in.valid && !out.ready){
         in.ready := false.B 
       }
     }
   }
 
-  printf(cf"SkidBuffer ${_time}: state: ${state.asUInt}, input: ${in}, output: ${out}\n")
+  // printf(cf"SkidBuffer ${_time}: state: ${state.asUInt}, input: ${in}, output: ${out}\n")
 }
 
 class SkidBufferStage[T <: Data](
@@ -93,8 +95,9 @@ class SkidBufferStage[T <: Data](
   val intake = IO(Flipped(Decoupled(gen)))
   val emit = IO(Decoupled(gen))
 
-  val sb = Module(new SkidBuffer[T](gen))
-  sb.in:<>= intake
+  val sb = Module(new SkidBuffer(gen))
+
+  sb.in :<>= intake
   emit :<>= sb.out
 
   // overwrite emit.bits
@@ -103,5 +106,5 @@ class SkidBufferStage[T <: Data](
   wrapped_bits.valid := sb.out.valid
   emit.bits := transfer_function(wrapped_bits)
 
-  printf(cf"SkidBufferStage: intake: ${intake}, emit: ${emit}\n")
+  // printf(cf"SkidBufferStage: intake: ${intake}, emit: ${emit}\n")
 }
