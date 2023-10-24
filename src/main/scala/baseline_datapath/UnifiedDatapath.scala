@@ -55,7 +55,7 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
   // Each element of this array is an Option, that wraps a function object which
   // maps a Valid[ExtendedPipelineBundle] to a Valid[ExtendedPipelineBundle]
   val stage_functions = collection.mutable.ArrayBuffer.fill[Option[
-    Valid[ExtendedPipelineBundle] => Valid[ExtendedPipelineBundle]
+    ExtendedPipelineBundle => ExtendedPipelineBundle
   ]](_stage_count)(None)
 
   // Define the functions!
@@ -65,49 +65,47 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
   // stage 3 performs 24 adds for ray-box, or 9 adds for ray-triangle, to
   // translate the geometries to the origin of the ray
   stage_functions(3) = Some({ intake =>
-    val emit = Wire(Valid(new ExtendedPipelineBundle(true)))
+    val emit = Wire(new ExtendedPipelineBundle(true))
 
     // By default, copy the input. Code below overwrites fields of the bundle.
     emit := intake
 
-    when(!intake.valid) {
-      emit.bits := 0.U.asTypeOf(emit.bits)
-    }.elsewhen(intake.bits.isTriangleOp) {
+    when(intake.isTriangleOp) {
       // ray-triangle
       val _dest = Seq(
-        emit.bits.triangle.A.x,
-        emit.bits.triangle.A.y,
-        emit.bits.triangle.A.z,
-        emit.bits.triangle.B.x,
-        emit.bits.triangle.B.y,
-        emit.bits.triangle.B.z,
-        emit.bits.triangle.C.x,
-        emit.bits.triangle.C.y,
-        emit.bits.triangle.C.z
+        emit.triangle.A.x,
+        emit.triangle.A.y,
+        emit.triangle.A.z,
+        emit.triangle.B.x,
+        emit.triangle.B.y,
+        emit.triangle.B.z,
+        emit.triangle.C.x,
+        emit.triangle.C.y,
+        emit.triangle.C.z
       )
 
       val _src1 = Seq(
-        intake.bits.triangle.A.x,
-        intake.bits.triangle.A.y,
-        intake.bits.triangle.A.z,
-        intake.bits.triangle.B.x,
-        intake.bits.triangle.B.y,
-        intake.bits.triangle.B.z,
-        intake.bits.triangle.C.x,
-        intake.bits.triangle.C.y,
-        intake.bits.triangle.C.z
+        intake.triangle.A.x,
+        intake.triangle.A.y,
+        intake.triangle.A.z,
+        intake.triangle.B.x,
+        intake.triangle.B.y,
+        intake.triangle.B.z,
+        intake.triangle.C.x,
+        intake.triangle.C.y,
+        intake.triangle.C.z
       )
 
       val _src2 = Seq(
-        intake.bits.ray.origin.x,
-        intake.bits.ray.origin.y,
-        intake.bits.ray.origin.z,
-        intake.bits.ray.origin.x,
-        intake.bits.ray.origin.y,
-        intake.bits.ray.origin.z,
-        intake.bits.ray.origin.x,
-        intake.bits.ray.origin.y,
-        intake.bits.ray.origin.z
+        intake.ray.origin.x,
+        intake.ray.origin.y,
+        intake.ray.origin.z,
+        intake.ray.origin.x,
+        intake.ray.origin.y,
+        intake.ray.origin.z,
+        intake.ray.origin.x,
+        intake.ray.origin.y,
+        intake.ray.origin.z
       )
 
       (_dest zip _src1 zip _src2).map { case ((_1, _2), _3) =>
@@ -133,28 +131,28 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
        */
       for (box_idx <- 0 until _box_plurality) {
         val _dest = Seq(
-          emit.bits.aabb(box_idx).x_min,
-          emit.bits.aabb(box_idx).y_min,
-          emit.bits.aabb(box_idx).z_min,
-          emit.bits.aabb(box_idx).x_max,
-          emit.bits.aabb(box_idx).y_max,
-          emit.bits.aabb(box_idx).z_max
+          emit.aabb(box_idx).x_min,
+          emit.aabb(box_idx).y_min,
+          emit.aabb(box_idx).z_min,
+          emit.aabb(box_idx).x_max,
+          emit.aabb(box_idx).y_max,
+          emit.aabb(box_idx).z_max
         )
         val _src1 = Seq(
-          intake.bits.aabb(box_idx).x_min,
-          intake.bits.aabb(box_idx).y_min,
-          intake.bits.aabb(box_idx).z_min,
-          intake.bits.aabb(box_idx).x_max,
-          intake.bits.aabb(box_idx).y_max,
-          intake.bits.aabb(box_idx).z_max
+          intake.aabb(box_idx).x_min,
+          intake.aabb(box_idx).y_min,
+          intake.aabb(box_idx).z_min,
+          intake.aabb(box_idx).x_max,
+          intake.aabb(box_idx).y_max,
+          intake.aabb(box_idx).z_max
         )
         val _src2 = Seq(
-          intake.bits.ray.origin.x,
-          intake.bits.ray.origin.y,
-          intake.bits.ray.origin.z,
-          intake.bits.ray.origin.x,
-          intake.bits.ray.origin.y,
-          intake.bits.ray.origin.z
+          intake.ray.origin.x,
+          intake.ray.origin.y,
+          intake.ray.origin.z,
+          intake.ray.origin.x,
+          intake.ray.origin.y,
+          intake.ray.origin.z
         )
         (_dest zip _src1 zip _src2) foreach { case ((_1, _2), _3) =>
           val fu = Module(new AddRecFN(8, 24))
@@ -176,61 +174,59 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
   // intervals, or 9 mul-adds for ray-triangle to perform shear and scale of
   // triangle vertices
   stage_functions(4) = Some({ intake =>
-    val emit = Wire(Valid(new ExtendedPipelineBundle(true)))
+    val emit = Wire(new ExtendedPipelineBundle(true))
     emit := intake
 
-    when(!intake.valid) {
-      emit.bits := 0.U.asTypeOf(emit.bits)
-    }.elsewhen(intake.bits.isTriangleOp) {
-      val kx = intake.bits.ray.kx
-      val ky = intake.bits.ray.ky
-      val kz = intake.bits.ray.kz
+    when(intake.isTriangleOp) {
+      val kx = intake.ray.kx
+      val ky = intake.ray.ky
+      val kz = intake.ray.kz
 
       val _dest = Seq(
-        emit.bits.A.x,
-        emit.bits.A.y,
-        emit.bits.A.z,
-        emit.bits.B.x,
-        emit.bits.B.y,
-        emit.bits.B.z,
-        emit.bits.C.x,
-        emit.bits.C.y,
-        emit.bits.C.z
+        emit.A.x,
+        emit.A.y,
+        emit.A.z,
+        emit.B.x,
+        emit.B.y,
+        emit.B.z,
+        emit.C.x,
+        emit.C.y,
+        emit.C.z
       )
 
       val _src1 = Seq(
-        FNFlipSign(intake.bits.ray.shear.x),
-        FNFlipSign(intake.bits.ray.shear.y),
-        intake.bits.ray.shear.z,
-        FNFlipSign(intake.bits.ray.shear.x),
-        FNFlipSign(intake.bits.ray.shear.y),
-        intake.bits.ray.shear.z,
-        FNFlipSign(intake.bits.ray.shear.x),
-        FNFlipSign(intake.bits.ray.shear.y),
-        intake.bits.ray.shear.z
+        FNFlipSign(intake.ray.shear.x),
+        FNFlipSign(intake.ray.shear.y),
+        intake.ray.shear.z,
+        FNFlipSign(intake.ray.shear.x),
+        FNFlipSign(intake.ray.shear.y),
+        intake.ray.shear.z,
+        FNFlipSign(intake.ray.shear.x),
+        FNFlipSign(intake.ray.shear.y),
+        intake.ray.shear.z
       )
 
       val _src2 = Seq(
-        intake.bits.triangle.A.at(kz),
-        intake.bits.triangle.A.at(kz),
-        intake.bits.triangle.A.at(kz),
-        intake.bits.triangle.B.at(kz),
-        intake.bits.triangle.B.at(kz),
-        intake.bits.triangle.B.at(kz),
-        intake.bits.triangle.C.at(kz),
-        intake.bits.triangle.C.at(kz),
-        intake.bits.triangle.C.at(kz)
+        intake.triangle.A.at(kz),
+        intake.triangle.A.at(kz),
+        intake.triangle.A.at(kz),
+        intake.triangle.B.at(kz),
+        intake.triangle.B.at(kz),
+        intake.triangle.B.at(kz),
+        intake.triangle.C.at(kz),
+        intake.triangle.C.at(kz),
+        intake.triangle.C.at(kz)
       )
 
       val _src3 = Seq(
-        intake.bits.triangle.A.at(kx),
-        intake.bits.triangle.A.at(ky),
+        intake.triangle.A.at(kx),
+        intake.triangle.A.at(ky),
         _zero_RecFN,
-        intake.bits.triangle.B.at(kx),
-        intake.bits.triangle.B.at(ky),
+        intake.triangle.B.at(kx),
+        intake.triangle.B.at(ky),
         _zero_RecFN,
-        intake.bits.triangle.C.at(kx),
-        intake.bits.triangle.C.at(ky),
+        intake.triangle.C.at(kx),
+        intake.triangle.C.at(ky),
         _zero_RecFN
       )
 
@@ -260,28 +256,28 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
        */
       for (box_idx <- 0 until _box_plurality) {
         val _dest = Seq(
-          emit.bits.t_min(box_idx).x,
-          emit.bits.t_min(box_idx).y,
-          emit.bits.t_min(box_idx).z,
-          emit.bits.t_max(box_idx).x,
-          emit.bits.t_max(box_idx).y,
-          emit.bits.t_max(box_idx).z
+          emit.t_min(box_idx).x,
+          emit.t_min(box_idx).y,
+          emit.t_min(box_idx).z,
+          emit.t_max(box_idx).x,
+          emit.t_max(box_idx).y,
+          emit.t_max(box_idx).z
         )
         val _src1 = Seq(
-          intake.bits.aabb(box_idx).x_min,
-          intake.bits.aabb(box_idx).y_min,
-          intake.bits.aabb(box_idx).z_min,
-          intake.bits.aabb(box_idx).x_max,
-          intake.bits.aabb(box_idx).y_max,
-          intake.bits.aabb(box_idx).z_max
+          intake.aabb(box_idx).x_min,
+          intake.aabb(box_idx).y_min,
+          intake.aabb(box_idx).z_min,
+          intake.aabb(box_idx).x_max,
+          intake.aabb(box_idx).y_max,
+          intake.aabb(box_idx).z_max
         )
         val _src2 = Seq(
-          intake.bits.ray.inv.x,
-          intake.bits.ray.inv.y,
-          intake.bits.ray.inv.z,
-          intake.bits.ray.inv.x,
-          intake.bits.ray.inv.y,
-          intake.bits.ray.inv.z
+          intake.ray.inv.x,
+          intake.ray.inv.y,
+          intake.ray.inv.z,
+          intake.ray.inv.x,
+          intake.ray.inv.y,
+          intake.ray.inv.z
         )
         (_dest zip _src1 zip _src2) foreach { case ((_1, _2), _3) =>
           // val fu = Module(new MulRecFN(8, 24))
@@ -310,37 +306,35 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
   // stage 5 performs 6 muls for ray-triangle test to figure out the minuends and
   // subtrahends of U, V, W
   stage_functions(5) = Some({ intake =>
-    val emit = Wire(Valid(new ExtendedPipelineBundle(true)))
+    val emit = Wire(new ExtendedPipelineBundle(true))
     emit := intake
 
-    when(!intake.valid) {
-      emit.bits := 0.U.asTypeOf((emit.bits))
-    }.elsewhen(intake.bits.isTriangleOp) {
+    when(intake.isTriangleOp) {
       val _dest = Seq(
-        emit.bits.U,
-        emit.bits.V,
-        emit.bits.W,
-        emit.bits.U_subtrahend,
-        emit.bits.V_subtrahend,
-        emit.bits.W_subtrahend
+        emit.U,
+        emit.V,
+        emit.W,
+        emit.U_subtrahend,
+        emit.V_subtrahend,
+        emit.W_subtrahend
       )
 
       val _src1 = Seq(
-        intake.bits.C.x,
-        intake.bits.A.x,
-        intake.bits.B.x,
-        intake.bits.C.y,
-        intake.bits.A.y,
-        intake.bits.B.y
+        intake.C.x,
+        intake.A.x,
+        intake.B.x,
+        intake.C.y,
+        intake.A.y,
+        intake.B.y
       )
 
       val _src2 = Seq(
-        intake.bits.B.y,
-        intake.bits.C.y,
-        intake.bits.A.y,
-        intake.bits.B.x,
-        intake.bits.C.x,
-        intake.bits.A.x
+        intake.B.y,
+        intake.C.y,
+        intake.A.y,
+        intake.B.x,
+        intake.C.x,
+        intake.A.x
       )
 
       (_dest zip _src1 zip _src2).map { case ((_1, _2), _3) =>
@@ -360,26 +354,24 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
 
   // stage 6 performs 3 adds for ray-triangle test to find the value of U, V, W
   stage_functions(6) = Some({ intake =>
-    val emit = Wire(Valid(new ExtendedPipelineBundle(true)))
+    val emit = Wire(new ExtendedPipelineBundle(true))
     emit := intake
 
-    when(!intake.valid) {
-      emit.bits := 0.U.asTypeOf((emit.bits))
-    }.elsewhen(intake.bits.isTriangleOp) {
+    when(intake.isTriangleOp) {
       val _dest = Seq(
-        emit.bits.U,
-        emit.bits.V,
-        emit.bits.W
+        emit.U,
+        emit.V,
+        emit.W
       )
       val _src1 = Seq(
-        intake.bits.U,
-        intake.bits.V,
-        intake.bits.W
+        intake.U,
+        intake.V,
+        intake.W
       )
       val _src2 = Seq(
-        intake.bits.U_subtrahend,
-        intake.bits.V_subtrahend,
-        intake.bits.W_subtrahend
+        intake.U_subtrahend,
+        intake.V_subtrahend,
+        intake.W_subtrahend
       )
       (_dest zip _src1 zip _src2).map { case ((_1, _2), _3) =>
         val fu = Module(new AddRecFN(8, 24))
@@ -400,26 +392,24 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
 
   // stage 7 calculates U*Az, V*Bz and W*Cz for ray-triangle test
   stage_functions(7) = Some({ intake =>
-    val emit = Wire(Valid(new ExtendedPipelineBundle(true)))
+    val emit = Wire(new ExtendedPipelineBundle(true))
     emit := intake
 
-    when(!intake.valid) {
-      emit.bits := 0.U.asTypeOf(emit.bits)
-    }.elsewhen(intake.bits.isTriangleOp) {
+    when(intake.isTriangleOp) {
       val _dest = Seq(
-        emit.bits.U_Az,
-        emit.bits.V_Bz,
-        emit.bits.W_Cz
+        emit.U_Az,
+        emit.V_Bz,
+        emit.W_Cz
       )
       val _src1 = Seq(
-        intake.bits.U,
-        intake.bits.V,
-        intake.bits.W
+        intake.U,
+        intake.V,
+        intake.W
       )
       val _src2 = Seq(
-        intake.bits.A.z,
-        intake.bits.B.z,
-        intake.bits.C.z
+        intake.A.z,
+        intake.B.z,
+        intake.C.z
       )
       (_dest zip _src1 zip _src2).map { case ((_1, _2), _3) =>
         val fu = Module(new MulRecFN(8, 24))
@@ -439,28 +429,26 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
   // stage 8 does two adds for ray-triangle test to find out the partial sum for
   // t_denom and t_num
   stage_functions(8) = Some({ intake =>
-    val emit = Wire(Valid(new ExtendedPipelineBundle(true)))
+    val emit = Wire(new ExtendedPipelineBundle(true))
     emit := intake
 
-    when(!intake.valid) {
-      emit.bits := 0.U.asTypeOf(emit.bits)
-    }.elsewhen(intake.bits.isTriangleOp) {
+    when(intake.isTriangleOp) {
       val fu_denom = Module(new AddRecFN(8, 24))
       fu_denom.io.subOp := false.B
-      fu_denom.io.a := intake.bits.U
-      fu_denom.io.b := intake.bits.V
+      fu_denom.io.a := intake.U
+      fu_denom.io.b := intake.V
       fu_denom.io.roundingMode := _rounding_rule
       fu_denom.io.detectTininess := _tininess_rule
-      emit.bits.t_denom := fu_denom.io.out
+      emit.t_denom := fu_denom.io.out
       // handle exception flags
 
       val fu_num = Module(new AddRecFN(8, 24))
       fu_num.io.subOp := false.B
-      fu_num.io.a := intake.bits.U_Az
-      fu_num.io.b := intake.bits.V_Bz
+      fu_num.io.a := intake.U_Az
+      fu_num.io.b := intake.V_Bz
       fu_num.io.roundingMode := _rounding_rule
       fu_num.io.detectTininess := _tininess_rule
-      emit.bits.t_num := fu_num.io.out
+      emit.t_num := fu_num.io.out
       // handle exception flags
     }.otherwise {}
 
@@ -470,28 +458,26 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
   // stage 9 performs two adds for ray-triangle test, to complete the summation
   // of t_denom and t_num
   stage_functions(9) = Some({ intake =>
-    val emit = Wire(Valid(new ExtendedPipelineBundle(true)))
+    val emit = Wire(new ExtendedPipelineBundle(true))
     emit := intake
 
-    when(!intake.valid) {
-      emit.bits := 0.U.asTypeOf(emit.bits)
-    }.elsewhen(intake.bits.isTriangleOp) {
+    when(intake.isTriangleOp) {
       val fu_denom = Module(new AddRecFN(8, 24))
       fu_denom.io.subOp := false.B
-      fu_denom.io.a := intake.bits.t_denom
-      fu_denom.io.b := intake.bits.W
+      fu_denom.io.a := intake.t_denom
+      fu_denom.io.b := intake.W
       fu_denom.io.roundingMode := _rounding_rule
       fu_denom.io.detectTininess := _tininess_rule
-      emit.bits.t_denom := fu_denom.io.out
+      emit.t_denom := fu_denom.io.out
       // handle exception flags
 
       val fu_num = Module(new AddRecFN(8, 24))
       fu_num.io.subOp := false.B
-      fu_num.io.a := intake.bits.t_num
-      fu_num.io.b := intake.bits.W_Cz
+      fu_num.io.a := intake.t_num
+      fu_num.io.b := intake.W_Cz
       fu_num.io.roundingMode := _rounding_rule
       fu_num.io.detectTininess := _tininess_rule
-      emit.bits.t_num := fu_num.io.out
+      emit.t_num := fu_num.io.out
       // handle exception flags
     }.otherwise {}
 
@@ -502,20 +488,18 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
   // intersection to figure out intersecting boxes and sort them; or 5
   // comparisons for ray-triangle test to determine validity of intersection
   stage_functions(10) = Some({ intake =>
-    val emit = Wire(Valid(new ExtendedPipelineBundle(true)))
+    val emit = Wire(new ExtendedPipelineBundle(true))
     emit := intake
 
     // printf(cf"${_time}: stage 10 intake is valid? ${intake.valid}\n")
 
-    when(!intake.valid) {
-      emit.bits := 0.U.asTypeOf(emit.bits)
-    }.elsewhen(intake.bits.isTriangleOp) {
+    when(intake.isTriangleOp) {
       val _src1 = Seq(
-        intake.bits.U,
-        intake.bits.V,
-        intake.bits.W,
-        intake.bits.t_denom,
-        intake.bits.t_num
+        intake.U,
+        intake.V,
+        intake.W,
+        intake.t_denom,
+        intake.t_num
       )
       val _src2 = Seq.fill(5)(_zero_RecFN)
       val _fu = Seq.fill(5)(Module(new CompareRecFN(8, 24)))
@@ -528,12 +512,12 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
 
       when(_fu(0).io.lt || _fu(1).io.lt || _fu(2).io.lt || _fu(4).io.lt) {
         // miss if U/V/W/t_num < 0.0f
-        emit.bits.triangle_hit := false.B
+        emit.triangle_hit := false.B
       }.elsewhen(_fu(3).io.eq) {
         // miss if t_denom == 0.0f
-        emit.bits.triangle_hit := false.B
+        emit.triangle_hit := false.B
       }.otherwise {
-        emit.bits.triangle_hit := true.B
+        emit.triangle_hit := true.B
       }
     }.otherwise {
       // ray-box test
@@ -566,45 +550,45 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
 
       for (box_idx <- 0 until _box_plurality) {
         flip_intervals_if_dir_is_neg(
-          emit.bits.t_min(box_idx).x,
-          emit.bits.t_max(box_idx).x,
-          intake.bits.ray.dir.x,
+          emit.t_min(box_idx).x,
+          emit.t_max(box_idx).x,
+          intake.ray.dir.x,
           _zero_RecFN,
-          intake.bits.t_min(box_idx).x,
-          intake.bits.t_max(box_idx).x,
+          intake.t_min(box_idx).x,
+          intake.t_max(box_idx).x,
           true
         )
         flip_intervals_if_dir_is_neg(
-          emit.bits.t_min(box_idx).y,
-          emit.bits.t_max(box_idx).y,
-          intake.bits.ray.dir.y,
+          emit.t_min(box_idx).y,
+          emit.t_max(box_idx).y,
+          intake.ray.dir.y,
           _zero_RecFN,
-          intake.bits.t_min(box_idx).y,
-          intake.bits.t_max(box_idx).y,
+          intake.t_min(box_idx).y,
+          intake.t_max(box_idx).y,
           true
         )
         flip_intervals_if_dir_is_neg(
-          emit.bits.t_min(box_idx).z,
-          emit.bits.t_max(box_idx).z,
-          intake.bits.ray.dir.z,
+          emit.t_min(box_idx).z,
+          emit.t_max(box_idx).z,
+          intake.ray.dir.z,
           _zero_RecFN,
-          intake.bits.t_min(box_idx).z,
-          intake.bits.t_max(box_idx).z,
+          intake.t_min(box_idx).z,
+          intake.t_max(box_idx).z,
           true
         )
 
         val quad_sort_for_tmin = Module(new QuadSortRecFN())
-        quad_sort_for_tmin.io.in(0) := emit.bits.t_min(box_idx).x
-        quad_sort_for_tmin.io.in(1) := emit.bits.t_min(box_idx).y
-        quad_sort_for_tmin.io.in(2) := emit.bits.t_min(box_idx).z
+        quad_sort_for_tmin.io.in(0) := emit.t_min(box_idx).x
+        quad_sort_for_tmin.io.in(1) := emit.t_min(box_idx).y
+        quad_sort_for_tmin.io.in(2) := emit.t_min(box_idx).z
         quad_sort_for_tmin.io.in(3) := _zero_RecFN
         tmin_intermediate(box_idx) := quad_sort_for_tmin.io.largest
 
         val quad_sort_for_tmax = Module(new QuadSortRecFN())
-        quad_sort_for_tmax.io.in(0) := emit.bits.t_max(box_idx).x
-        quad_sort_for_tmax.io.in(1) := emit.bits.t_max(box_idx).y
-        quad_sort_for_tmax.io.in(2) := emit.bits.t_max(box_idx).z
-        quad_sort_for_tmax.io.in(3) := intake.bits.ray.extent
+        quad_sort_for_tmax.io.in(0) := emit.t_max(box_idx).x
+        quad_sort_for_tmax.io.in(1) := emit.t_max(box_idx).y
+        quad_sort_for_tmax.io.in(2) := emit.t_max(box_idx).z
+        quad_sort_for_tmax.io.in(3) := intake.ray.extent
         tmax_intermediate(box_idx) := quad_sort_for_tmax.io.smallest
 
         // if there's overlap between [tmin, inf) and (-inf, tmax], we say ray-box
@@ -616,7 +600,7 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
 
         isIntersect_intermediate(box_idx) := comp_tmin_tmax.io.lt
       }
-      // printf(cf"${_time}: tpmin is ${emit.bits.t_min}, tpmax is ${emit.bits.t_max}\n")
+      // printf(cf"${_time}: tpmin is ${emit.t_min}, tpmax is ${emit.t_max}\n")
       // printf(cf"${_time}: tmin_intermediate is ${tmin_intermediate}\n")
 
       val tmin_but_substitute_non_intersect_with_PInf =
@@ -628,13 +612,13 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
       // sorter outputs from biggest to smallest, so reverse output
       val quad_sort_for_box_index = Module(new QuadSortRecFNWithIndex)
       quad_sort_for_box_index.io.in := tmin_but_substitute_non_intersect_with_PInf
-      emit.bits.boxIndex := quad_sort_for_box_index.io.sorted_indices.reverse
+      emit.boxIndex := quad_sort_for_box_index.io.sorted_indices.reverse
 
       val quad_sort_for_t = Module(new QuadSortRecFN)
       quad_sort_for_t.io.in := tmin_but_substitute_non_intersect_with_PInf
-      emit.bits.tmin := quad_sort_for_t.io.out.reverse
+      emit.tmin := quad_sort_for_t.io.out.reverse
 
-      emit.bits.isIntersect.zip(emit.bits.boxIndex).foreach { case (b, idx) =>
+      emit.isIntersect.zip(emit.boxIndex).foreach { case (b, idx) =>
         b := isIntersect_intermediate(idx)
       }
     }
@@ -656,19 +640,21 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
   // each stage's input
   for (idx <- 1 until _stage_count) {
     if (!submodule_for_stage) {
-      stage_registers(idx) := stage_functions(idx).getOrElse(
-        (x: Valid[ExtendedPipelineBundle]) => identity(x)
-      )(stage_registers(idx - 1))
+      stage_registers(idx).bits := stage_functions(idx).getOrElse(
+        (x: ExtendedPipelineBundle) => identity(x)
+      )(stage_registers(idx - 1).bits)
+      stage_registers(idx).valid := stage_registers(idx-1).valid
     } else {
       // the following code creates an anonymous module for each stage
       val stage_comb_module = Module(new Module {
         val intake = IO(Flipped(Valid(new ExtendedPipelineBundle(true))))
         val emit = IO(Valid(new ExtendedPipelineBundle(true)))
         val transform_function =
-          stage_functions(idx).getOrElse((x: Valid[ExtendedPipelineBundle]) =>
+          stage_functions(idx).getOrElse((x: ExtendedPipelineBundle) =>
             identity(x)
           )
-        emit := transform_function(intake)
+        emit.bits := transform_function(intake.bits)
+        emit.valid := intake.valid
       })
       stage_comb_module.suggestName(s"stage_comb_module_${idx}")
       stage_comb_module.intake := stage_registers(idx - 1)
