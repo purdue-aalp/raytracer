@@ -1,6 +1,7 @@
 package baseline_datapath
 
 import chisel3._
+import chisel3.util.Decoupled
 import circt.stage.ChiselStage
 import hardfloat._
 
@@ -53,6 +54,20 @@ class Bar(
   out := convert.io.out
 }
 
+class ChainedSkidBufferStages extends Module{
+  val intake = IO(Flipped(Decoupled(UInt(10.W))))
+  val emit = IO(Decoupled(UInt(10.W)))
+
+  val stage1 = Module(new SkidBufferStage(UInt(10.W), {(x:UInt)=>x + 9.U})).suggestName("stage1")
+  val stage2 = Module(new SkidBufferStage(UInt(10.W), {(x:UInt)=>x * 11.U})).suggestName("stage2")
+  val stage3 = Module(new SkidBufferStage(UInt(10.W), {(x:UInt)=>x - 9.U})).suggestName("stage3")
+
+  stage1.intake :<>= intake 
+  stage2.intake :<>= stage1.emit 
+  stage3.intake :<>= stage2.emit
+  emit :<>= stage3.emit
+}
+
 object EmitVerilog extends App {
   var shortest_length = Double.PositiveInfinity
   var shortest_code = new String()
@@ -72,6 +87,8 @@ object EmitVerilog extends App {
 
   // print(shortest_code)
 
-  val sv_code = ChiselStage.emitSystemVerilog(new Bar(outExp = 9, outSig = 27))
+  // val sv_code = ChiselStage.emitSystemVerilog(new Bar(outExp = 9, outSig =
+  // 27))
+  val sv_code = ChiselStage.emitSystemVerilog(new ChainedSkidBufferStages)
   print(sv_code)
 }
