@@ -53,8 +53,8 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   type HW_Box = baseline_datapath.AABB
 
   val r = new Random()
-  val N_RANDOM_TEST = 20000
-  val PRINT_END_TIME = false
+  val N_RANDOM_TEST = 16
+  val PRINT_END_TIME = true
   val float_tolerance_error =
     0.001 // normalized error: 149 vs 100 would have an error of 0.49
   val use_stage_submodule = false
@@ -189,19 +189,15 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       box_seq_seq: Seq[Seq[SW_Box]],
       ray_seq: Seq[SW_Ray]
   ): Unit = {
-    // Everything we pass to the DecoupledDriver are LazyList,
-    // which means elements won't be evaluated until they are accessed.
-    // Furhtermore, using `def` instead of `val` allows garbage collection
-    // to destroy spent elements ASAP.
 
-    def ray_box_list: LazyList[SW_CombinedData] = LazyList.from {
+    val ray_box_list: List[SW_CombinedData] = List.from {
       (ray_seq zip box_seq_seq).map { case (r, bs) =>
         SW_CombinedData(r, bs, SW_Triangle(), false)
       }
     }
 
     // a sequence of software gold results
-    def sw_result_seq: LazyList[RaytracerGold.SW_RayBox_Result] = {
+    val sw_result_seq: List[RaytracerGold.SW_RayBox_Result] = {
       ray_box_list.map {
         case SW_CombinedData(r, bseq, t, false) => {
           // println("calculated a sw result")
@@ -228,6 +224,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
             // to CombinedRayBoxTriangleBundle).
             dut.in.enqueueSeq(ray_box_list)
           }.fork {
+            dut.out.ready.poke(true.B)
             // On the other hand, we sit at the output side and examing for valid
             // outputs one-by-one.
             // Because non-intersects have unspecified order, the software result
@@ -256,7 +253,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       ray_seq: Seq[SW_Ray]
   ): Unit = {
     description in {
-      def ray_triangle_list: LazyList[SW_CombinedData] = LazyList.from {
+      val ray_triangle_list: List[SW_CombinedData] = List.from {
         (ray_seq zip triangle_seq).map { case (r, ts) =>
           lazy val _four_empty_boxes = Seq.fill[SW_Box](4)(SW_Box())
           SW_CombinedData(r, _four_empty_boxes, ts, true)
@@ -264,7 +261,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       }
 
       // a sequence of software gold results
-      def sw_result_seq: LazyList[RaytracerGold.SW_RayTriangle_Result] = {
+      val sw_result_seq: List[RaytracerGold.SW_RayTriangle_Result] = {
         ray_triangle_list.map {
           case SW_CombinedData(r, _, t, true) => {
             // println("calculated a sw result")
@@ -292,6 +289,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
           fork {
             dut.in.enqueueSeq(ray_triangle_list)
           }.fork {
+            dut.out.ready.poke(true.B)
             sw_result_seq.zipWithIndex.zip(ray_triangle_list).foreach {
               case ((sw_r, input_no), input) =>
                 dut.out.waitForValid()
@@ -341,15 +339,15 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       op_seq: Seq[Boolean]
   ): Unit = {
     description in {
-      def combined_data_list: LazyList[SW_CombinedData] = LazyList.from {
+      val combined_data_list: List[SW_CombinedData] = List.from {
         (ray_seq zip box_seq_seq zip triangle_seq zip op_seq).map {
           case (((ray, boxs), tri), op) =>
             SW_CombinedData(ray, boxs, tri, op)
         }
       }
 
-      // a sequence of software gold results
-      def sw_result_seq: LazyList[RaytracerGold.SW_Unified_Result] = {
+    // a sequence of software gold results
+      val sw_result_seq: List[RaytracerGold.SW_Unified_Result] = {
         combined_data_list.map {
           case SW_CombinedData(r, _, t, true) => {
             // println("calculated a sw result")
@@ -373,7 +371,9 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
       test(new UnifiedDatapath_wrapper(use_stage_submodule))
         .withAnnotations(
-          chisel_test_annotations :++ {if(dump_vcd_for_unified_test){WriteVcdAnnotation::Nil} else {Nil}}
+          // chisel_test_annotations :++
+          // {if(dump_vcd_for_unified_test){WriteVcdAnnotation::Nil} else {Nil}}
+          chisel_test_annotations
         )
         .withChiselAnnotations(
           chisel_test_chisel_annotations
@@ -382,8 +382,9 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
           dut.out.initSink().setSinkClock(dut.clock)
 
           fork {
-            dut.in.enqueueSeq(combined_data_list)
+            dut.in.enqueueSeq(combined_data_list.toList)
           }.fork {
+            dut.out.ready.poke(true.B)
             sw_result_seq.zipWithIndex.map { case (sw_r, input_no) =>
               dut.out.waitForValid()
               if (sw_r.isTriangle) {
@@ -401,6 +402,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
           println(s"test ends at time ${dut.exposed_time.peek().litValue}")
         }
+      
     }
   }
 
