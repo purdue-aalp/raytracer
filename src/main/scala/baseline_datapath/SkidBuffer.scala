@@ -3,7 +3,7 @@ package baseline_datapath
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental._
-object SkidBufferState extends ChiselEnum{
+object SkidBufferState extends ChiselEnum {
   /// Both skid and output buffer are empty
   val Empty = Value
 
@@ -15,10 +15,10 @@ object SkidBufferState extends ChiselEnum{
 }
 
 class GenerializedSkidBufferStage[T <: Data, V <: Data](
-  private val intake_gen: T,
-  private val emit_gen: V,
-  transfer_function: T=>V
-) extends Module{
+    private val intake_gen: T,
+    private val emit_gen: V,
+    transfer_function: T => V
+) extends Module {
   val intake = IO(Flipped(Decoupled(intake_gen)))
   val emit = IO(Decoupled(emit_gen))
 
@@ -47,56 +47,59 @@ class GenerializedSkidBufferStage[T <: Data, V <: Data](
   val flush = WireInit(state === SkidBufferState.Full && out.fire)
 
   // state transition
-  switch(state){
-    is(SkidBufferState.Empty){
-      when(in.fire){
+  switch(state) {
+    is(SkidBufferState.Empty) {
+      when(in.fire) {
         state := SkidBufferState.Busy
-      }.otherwise{
+      }.otherwise {
         // maintain
       }
     }
-    is(SkidBufferState.Busy){
-      when(in.fire && out.fire){
+    is(SkidBufferState.Busy) {
+      when(in.fire && out.fire) {
         // maintain
-      }.elsewhen(in.fire && !out.fire){
+      }.elsewhen(in.fire && !out.fire) {
         state := SkidBufferState.Full
-      }.elsewhen(!in.fire && out.fire){
+      }.elsewhen(!in.fire && out.fire) {
         state := SkidBufferState.Empty
-      }.otherwise{
+      }.otherwise {
         // maintain
       }
     }
-    is(SkidBufferState.Full){
-      when(out.fire){
+    is(SkidBufferState.Full) {
+      when(out.fire) {
         state := SkidBufferState.Busy
-      }.otherwise{
+      }.otherwise {
         // maintain
       }
     }
   }
-  
+
   // output buffer data
-  val transfer_function_input = Mux(state===SkidBufferState.Full, skid_buffer, in.bits)
-  when(load || flow || flush){
+  val transfer_function_input =
+    Mux(state === SkidBufferState.Full, skid_buffer, in.bits)
+  when(load || flow || flush) {
     output_buffer := transfer_function(transfer_function_input)
   }
 
   // skid buffer data
-  when(fill){
+  when(fill) {
     skid_buffer := in.bits
   }
 
 }
 
 class SkidBufferStage[T <: Data](
-  private val gen: T,
-  transfer_function: T=>T = (x: T) => identity(x)
-) extends Module{
+    private val gen: T,
+    transfer_function: T => T = (x: T) => identity(x)
+) extends Module {
   val intake = IO(Flipped(Decoupled(gen)))
   val emit = IO(Decoupled(gen))
 
-  val wrapped = Module(new GenerializedSkidBufferStage(gen, gen, transfer_function))
-  wrapped.intake :<>= intake 
+  val wrapped = Module(
+    new GenerializedSkidBufferStage(gen, gen, transfer_function)
+  )
+  wrapped.intake :<>= intake
   emit :<>= wrapped.emit
 }
 
@@ -159,7 +162,7 @@ class SkidBufferStage[T <: Data](
 //       }
 //     }
 //   }
-  
+
 //   // output buffer data
 //   val transfer_function_input = Mux(state===SkidBufferState.Full, skid_buffer, in.bits)
 //   when(load || flow || flush){

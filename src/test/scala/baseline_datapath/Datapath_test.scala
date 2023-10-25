@@ -346,7 +346,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
         }
       }
 
-    // a sequence of software gold results
+      // a sequence of software gold results
       val sw_result_seq: List[RaytracerGold.SW_Unified_Result] = {
         combined_data_list.map {
           case SW_CombinedData(r, _, t, true) => {
@@ -402,7 +402,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
           println(s"test ends at time ${dut.exposed_time.peek().litValue}")
         }
-      
+
     }
   }
 

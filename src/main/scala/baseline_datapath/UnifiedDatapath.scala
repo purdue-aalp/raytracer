@@ -661,36 +661,43 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
   //     stage_registers(idx) := stage_comb_module.emit
   //   }
   // }
-  val stage_modules = stage_functions.zipWithIndex.map{case(optF, idx) => 
-    val stage = optF match{
-      case Some(f) => Module(new SkidBufferStage(new ExtendedPipelineBundle(true), f))  
+  val stage_modules = stage_functions.zipWithIndex.map { case (optF, idx) =>
+    val stage = optF match {
+      case Some(f) =>
+        Module(new SkidBufferStage(new ExtendedPipelineBundle(true), f))
       case None => Module(new SkidBufferStage(new ExtendedPipelineBundle(true)))
     }
-    stage.suggestName(s"stage_${idx}") 
+    stage.suggestName(s"stage_${idx}")
     stage
   }
 
-  val _last_stage_emit_port = stage_modules.foldLeft(WireDefault(0.U.asTypeOf(Decoupled(new ExtendedPipelineBundle(true))))){case(w, s)=>
-    s.intake :<>= w 
-    s.emit  
+  val _last_stage_emit_port = stage_modules.foldLeft(
+    WireDefault(0.U.asTypeOf(Decoupled(new ExtendedPipelineBundle(true))))
+  ) { case (w, s) =>
+    s.intake :<>= w
+    s.emit
   }
   _last_stage_emit_port.ready := true.B
 
   // now that all stages are chained up, overwrite the first few stages
   // stage 1 is deprecated, since we have skid buffers now
   // stage 2 converts FN to RecFN, so need a more generic SkidBufferStage
-  val stage_2_actual_module = Module(new GenerializedSkidBufferStage(
-    new CombinedRayBoxTriangleBundle(false),
-    new ExtendedPipelineBundle(true),
-    {(input: CombinedRayBoxTriangleBundle) => 
-      val output = WireDefault(0.U.asTypeOf(new ExtendedPipelineBundle(true)))
-      output.isTriangleOp := input.isTriangleOp 
-      output.ray := RayConvertFNtoRecFN(input.ray)
-      output.triangle := TriangleConvertFNtoRecFN(input.triangle)
-      (output.aabb zip input.aabb).map{case(reg_o, reg_i) => reg_o := AABBConvertFNtoRecFN(reg_i)}
-      output
-    }
-  )).suggestName(s"stage_2_actual") 
+  val stage_2_actual_module = Module(
+    new GenerializedSkidBufferStage(
+      new CombinedRayBoxTriangleBundle(false),
+      new ExtendedPipelineBundle(true),
+      { (input: CombinedRayBoxTriangleBundle) =>
+        val output = WireDefault(0.U.asTypeOf(new ExtendedPipelineBundle(true)))
+        output.isTriangleOp := input.isTriangleOp
+        output.ray := RayConvertFNtoRecFN(input.ray)
+        output.triangle := TriangleConvertFNtoRecFN(input.triangle)
+        (output.aabb zip input.aabb).map { case (reg_o, reg_i) =>
+          reg_o := AABBConvertFNtoRecFN(reg_i)
+        }
+        output
+      }
+    )
+  ).suggestName(s"stage_2_actual")
 
   stage_2_actual_module.intake :<>= in
   stage_modules(3).intake :<>= stage_2_actual_module.emit
@@ -737,21 +744,23 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
   // out.bits.t_denom := fNFromRecFN(8, 24, stage_registers(10).bits.t_denom)
   // out.bits.t_num := fNFromRecFN(8, 24, stage_registers(10).bits.t_num)
   // out.bits.triangle_hit := stage_registers(10).bits.triangle_hit
-  val output_stage = Module(new GenerializedSkidBufferStage(
-    new ExtendedPipelineBundle(true),
-    new UnifiedDatapathOutput(false),
-    {(input: ExtendedPipelineBundle) =>
-      val output = Wire(new UnifiedDatapathOutput(false))
-      output.isTriangleOp := input.isTriangleOp
-      output.tmin_out := input.tmin.map(fNFromRecFN(8, 24, _))
-      output.isIntersect := input.isIntersect
-      output.boxIndex := input.boxIndex
-      output.t_denom := fNFromRecFN(8, 24, input.t_denom)
-      output.t_num := fNFromRecFN(8, 24, input.t_num)
-      output.triangle_hit := input.triangle_hit
-      output
-    }
-  ))
+  val output_stage = Module(
+    new GenerializedSkidBufferStage(
+      new ExtendedPipelineBundle(true),
+      new UnifiedDatapathOutput(false),
+      { (input: ExtendedPipelineBundle) =>
+        val output = Wire(new UnifiedDatapathOutput(false))
+        output.isTriangleOp := input.isTriangleOp
+        output.tmin_out := input.tmin.map(fNFromRecFN(8, 24, _))
+        output.isIntersect := input.isIntersect
+        output.boxIndex := input.boxIndex
+        output.t_denom := fNFromRecFN(8, 24, input.t_denom)
+        output.t_num := fNFromRecFN(8, 24, input.t_num)
+        output.triangle_hit := input.triangle_hit
+        output
+      }
+    )
+  )
   output_stage.intake :<>= stage_modules(10).emit
   out :<>= output_stage.emit
 }

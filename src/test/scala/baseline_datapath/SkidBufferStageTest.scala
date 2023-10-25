@@ -21,7 +21,7 @@ class SkidBufferStageTest extends AnyFreeSpec with ChiselScalatestTester {
 
   val chisel_test_annotations = Seq(
     // VerilatorBackendAnnotation,
-    CachingAnnotation,
+    CachingAnnotation
     // CachingDebugAnnotation,
     // TargetDirAnnotation(
     //   if (use_stage_submodule)
@@ -47,10 +47,10 @@ class SkidBufferStageTest extends AnyFreeSpec with ChiselScalatestTester {
         dut.intake.initSource().setSourceClock(dut.clock)
         dut.emit.initSink().setSinkClock(dut.clock)
 
-        fork{
+        fork {
           dut.intake.enqueueSeq(val_seq.map(_.U(10.W)))
-        }.fork{
-          dut.emit.expectDequeueSeq(val_seq.map(_.U(10.W)))    
+        }.fork {
+          dut.emit.expectDequeueSeq(val_seq.map(_.U(10.W)))
         }.join()
       }
   }
@@ -62,18 +62,18 @@ class SkidBufferStageTest extends AnyFreeSpec with ChiselScalatestTester {
         dut.intake.initSource().setSourceClock(dut.clock)
         dut.emit.initSink().setSinkClock(dut.clock)
 
-        fork{
+        fork {
           dut.intake.enqueueSeq(val_seq.map(_.U(10.W)))
-        }.fork{
-          val_seq.foreach{idx => 
+        }.fork {
+          val_seq.foreach { idx =>
             dut.emit.ready.poke(false.B)
-            while(r.nextFloat()<=output_prob){
+            while (r.nextFloat() <= output_prob) {
               dut.clock.step()
-            } 
-            
+            }
+
             // println(s"output expects ${idx}")
             dut.emit.expectDequeue(idx.U(10.W))
-          }  
+          }
         }.join()
       }
   }
@@ -85,17 +85,17 @@ class SkidBufferStageTest extends AnyFreeSpec with ChiselScalatestTester {
         dut.intake.initSource().setSourceClock(dut.clock)
         dut.emit.initSink().setSinkClock(dut.clock)
 
-        fork{
-          val_seq.foreach{idx => 
+        fork {
+          val_seq.foreach { idx =>
             dut.intake.valid.poke(false.B)
-            while(r.nextFloat() <= input_prob){
+            while (r.nextFloat() <= input_prob) {
               dut.clock.step()
-            }  
+            }
             // println(s"intake pokes ${idx}")
             dut.intake.enqueue(idx.U(10.W))
           }
-        }.fork{
-          dut.emit.expectDequeueSeq(val_seq.map(_.U(10.W))) 
+        }.fork {
+          dut.emit.expectDequeueSeq(val_seq.map(_.U(10.W)))
         }.join()
       }
   }
@@ -107,24 +107,24 @@ class SkidBufferStageTest extends AnyFreeSpec with ChiselScalatestTester {
         dut.intake.initSource().setSourceClock(dut.clock)
         dut.emit.initSink().setSinkClock(dut.clock)
 
-        fork{
-          val_seq.foreach{idx => 
+        fork {
+          val_seq.foreach { idx =>
             dut.intake.valid.poke(false.B)
-            while(r.nextFloat() <= input_prob){
+            while (r.nextFloat() <= input_prob) {
               dut.clock.step()
-            }  
+            }
             // println(s"intake pokes ${idx}")
             dut.intake.enqueue(idx.U(10.W))
           }
-        }.fork{
-          val_seq.foreach{idx => 
+        }.fork {
+          val_seq.foreach { idx =>
             dut.emit.ready.poke(false.B)
-            while(r.nextFloat()<=output_prob){
+            while (r.nextFloat() <= output_prob) {
               dut.clock.step()
-            } 
+            }
             // println(s"output expects ${idx}")
             dut.emit.expectDequeue(idx.U(10.W))
-          }  
+          }
         }.join()
       }
   }
@@ -139,38 +139,44 @@ class SkidBufferStageTest extends AnyFreeSpec with ChiselScalatestTester {
         dut.intake.initSource().setSourceClock(dut.clock)
         dut.emit.initSink().setSinkClock(dut.clock)
 
-        fork{
-          val_seq.take(30).foreach{idx => 
+        fork {
+          val_seq.take(30).foreach { idx =>
             dut.intake.valid.poke(false.B)
-            while(r.nextFloat() <= input_prob){
+            while (r.nextFloat() <= input_prob) {
               dut.clock.step()
-            }  
+            }
             // println(s"intake pokes ${idx}")
             dut.intake.enqueue(idx.U(10.W))
           }
-        }.fork{
-          val_seq.take(30).foreach{idx => 
+        }.fork {
+          val_seq.take(30).foreach { idx =>
             dut.emit.ready.poke(false.B)
-            while(r.nextFloat()<=output_prob){
+            while (r.nextFloat() <= output_prob) {
               dut.clock.step()
-            } 
+            }
             // println(s"output expects ${idx}")
-            dut.emit.expectDequeue((idx*idx).U(10.W))
-          }  
+            dut.emit.expectDequeue((idx * idx).U(10.W))
+          }
         }.join()
       }
   }
 
-  class ChainedSkidBufferStages extends Module{
+  class ChainedSkidBufferStages extends Module {
     val intake = IO(Flipped(Decoupled(UInt(10.W))))
     val emit = IO(Decoupled(UInt(10.W)))
 
-    val stage1 = Module(new SkidBufferStage(UInt(10.W), {(x:UInt)=>x + 9.U})).suggestName("stage1")
-    val stage2 = Module(new SkidBufferStage(UInt(10.W), {(x:UInt)=>x * 11.U})).suggestName("stage2")
-    val stage3 = Module(new SkidBufferStage(UInt(10.W), {(x:UInt)=>x - 9.U})).suggestName("stage3")
+    val stage1 = Module(
+      new SkidBufferStage(UInt(10.W), { (x: UInt) => x + 9.U })
+    ).suggestName("stage1")
+    val stage2 = Module(
+      new SkidBufferStage(UInt(10.W), { (x: UInt) => x * 11.U })
+    ).suggestName("stage2")
+    val stage3 = Module(
+      new SkidBufferStage(UInt(10.W), { (x: UInt) => x - 9.U })
+    ).suggestName("stage3")
 
-    stage1.intake :<>= intake 
-    stage2.intake :<>= stage1.emit 
+    stage1.intake :<>= intake
+    stage2.intake :<>= stage1.emit
     stage3.intake :<>= stage2.emit
     emit :<>= stage3.emit
   }
@@ -184,73 +190,92 @@ class SkidBufferStageTest extends AnyFreeSpec with ChiselScalatestTester {
         dut.intake.initSource().setSourceClock(dut.clock)
         dut.emit.initSink().setSinkClock(dut.clock)
 
-        fork{
-          val_seq.take(30).foreach{idx => 
+        fork {
+          val_seq.take(30).foreach { idx =>
             dut.intake.valid.poke(false.B)
-            while(r.nextFloat() <= input_prob){
+            while (r.nextFloat() <= input_prob) {
               dut.clock.step()
-            }  
+            }
             // println(s"intake pokes ${idx}")
             dut.intake.enqueue(idx.U(10.W))
           }
-        }.fork{
-          val_seq.take(30).foreach{idx => 
+        }.fork {
+          val_seq.take(30).foreach { idx =>
             dut.emit.ready.poke(false.B)
-            while(r.nextFloat()<=output_prob){
+            while (r.nextFloat() <= output_prob) {
               dut.clock.step()
-            } 
+            }
             // println(s"output expects ${idx}")
-            dut.emit.expectDequeue((idx*11+90).U(10.W))
-          }  
+            dut.emit.expectDequeue((idx * 11 + 90).U(10.W))
+          }
         }.join()
       }
   }
 
-  class ChainedGeneralizedSkidBufferStages extends Module{
+  class ChainedGeneralizedSkidBufferStages extends Module {
     val intake = IO(Flipped(Decoupled(UInt(10.W))))
     val emit = IO(Decoupled(SInt(10.W)))
 
     // UInt => Bool
-    val stage1 = Module(new GenerializedSkidBufferStage(UInt(10.W), Bool(), {(x:UInt)=>x(0).asBool})).suggestName("stage1")
-    
+    val stage1 = Module(
+      new GenerializedSkidBufferStage(
+        UInt(10.W),
+        Bool(),
+        { (x: UInt) => x(0).asBool }
+      )
+    ).suggestName("stage1")
+
     // Bool => UInt
-    class stage2_module_helper extends Module{
+    class stage2_module_helper extends Module {
       val x = IO(Input(Bool()))
       val y = IO(Output(UInt(10.W)))
-      when(x){y:=100.U(7.W)}.otherwise{y:=1.U(7.W)}
+      when(x) { y := 100.U(7.W) }.otherwise { y := 1.U(7.W) }
     }
-    object stage2_module_helper{
-      def apply(x: Bool): UInt ={
+    object stage2_module_helper {
+      def apply(x: Bool): UInt = {
         val fu = Module(new stage2_module_helper)
-        fu.x := x 
+        fu.x := x
         fu.y
       }
     }
-    val stage2 = Module(new GenerializedSkidBufferStage(Bool(), UInt(10.W), stage2_module_helper.apply)).suggestName("stage2")
-    
+    val stage2 = Module(
+      new GenerializedSkidBufferStage(
+        Bool(),
+        UInt(10.W),
+        stage2_module_helper.apply
+      )
+    ).suggestName("stage2")
+
     // UInt => SInt    class stage2_module_helper extends Module{
-    class stage3_module_helper extends Module{
+    class stage3_module_helper extends Module {
       val x = IO(Input(UInt(10.W)))
       val y = IO(Output(SInt(10.W)))
-      when(x<50.U){y:=(-1).S}.otherwise{y:=1.S}
+      when(x < 50.U) { y := (-1).S }.otherwise { y := 1.S }
     }
-    object stage3_module_helper{
-      def apply(x: UInt): SInt ={
+    object stage3_module_helper {
+      def apply(x: UInt): SInt = {
         val fu = Module(new stage3_module_helper)
-        fu.x := x 
+        fu.x := x
         fu.y
       }
     }
-    val stage3 = Module(new GenerializedSkidBufferStage(UInt(10.W), SInt(10.W), stage3_module_helper.apply)).suggestName("stage3")
+    val stage3 = Module(
+      new GenerializedSkidBufferStage(
+        UInt(10.W),
+        SInt(10.W),
+        stage3_module_helper.apply
+      )
+    ).suggestName("stage3")
 
-    stage1.intake :<>= intake 
-    stage2.intake :<>= stage1.emit 
+    stage1.intake :<>= intake
+    stage2.intake :<>= stage1.emit
     stage3.intake :<>= stage2.emit
     emit :<>= stage3.emit
   }
   "chained generalized skid buffer stages should function correctly when intake is throttled and emit is congested" in {
     def f(x: Int): Int = {
-      if(x%2==1){1}else{-1}
+      if (x % 2 == 1) { 1 }
+      else { -1 }
     }
     test(new ChainedGeneralizedSkidBufferStages())
       .withAnnotations(chisel_test_annotations)
@@ -258,26 +283,26 @@ class SkidBufferStageTest extends AnyFreeSpec with ChiselScalatestTester {
         dut.intake.initSource().setSourceClock(dut.clock)
         dut.emit.initSink().setSinkClock(dut.clock)
 
-        fork{
-          val_seq.foreach{idx => 
+        fork {
+          val_seq.foreach { idx =>
             dut.intake.valid.poke(false.B)
-            while(r.nextFloat() <= input_prob){
+            while (r.nextFloat() <= input_prob) {
               dut.clock.step()
-            }  
+            }
             // println(s"intake pokes ${idx}")
             dut.intake.enqueue(idx.U(10.W))
           }
-        }.fork{
-          val_seq.foreach{idx => 
+        }.fork {
+          val_seq.foreach { idx =>
             dut.emit.ready.poke(false.B)
-            while(r.nextFloat()<=output_prob){
+            while (r.nextFloat() <= output_prob) {
               dut.clock.step()
-            } 
+            }
             // println(s"output expects ${idx}")
             dut.emit.expectDequeue((f(idx)).S(10.W))
-          }  
+          }
         }.join()
       }
   }
-  
+
 }
