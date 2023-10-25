@@ -70,6 +70,17 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
     // By default, copy the input. Code below overwrites fields of the bundle.
     emit := intake
 
+    // an infinite list of AddRecFN modules, but only instantiated when needed
+    val fu_list: List[AddRecFN] = List.fill(24) {
+      val fu = Module(new AddRecFN(8, 24))
+      fu.io.a := 0.U
+      fu.io.b := 0.U
+      fu.io.detectTininess := 0.U
+      fu.io.roundingMode := 0.U
+      fu.io.subOp := 0.U
+      fu
+    }
+
     when(intake.isTriangleOp) {
       // ray-triangle
       val _dest = Seq(
@@ -108,15 +119,15 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
         intake.ray.origin.z
       )
 
-      (_dest zip _src1 zip _src2).map { case ((_1, _2), _3) =>
-        val fu = Module(new AddRecFN(8, 24))
-        fu.io.subOp := true.B
-        fu.io.a := _2
-        fu.io.b := _3
-        fu.io.roundingMode := _rounding_rule
-        fu.io.detectTininess := _tininess_rule
-        _1 := fu.io.out
-      // TODO: handle exception flags!
+      (_dest zip _src1 zip _src2 zip fu_list) foreach {
+        case (((_1, _2), _3), fu) =>
+          fu.io.subOp := true.B
+          fu.io.a := _2
+          fu.io.b := _3
+          fu.io.roundingMode := _rounding_rule
+          fu.io.detectTininess := _tininess_rule
+          _1 := fu.io.out
+        // TODO: handle exception flags!
       }
     }.otherwise {
       // ray-box
@@ -129,8 +140,8 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
         child.y_max = child.y_max - ray.origin.y;
         child.z_max = child.z_max - ray.origin.z;
        */
-      for (box_idx <- 0 until _box_plurality) {
-        val _dest = Seq(
+      val _dest = (0 until _box_plurality).flatMap { box_idx =>
+        Seq(
           emit.aabb(box_idx).x_min,
           emit.aabb(box_idx).y_min,
           emit.aabb(box_idx).z_min,
@@ -138,7 +149,9 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
           emit.aabb(box_idx).y_max,
           emit.aabb(box_idx).z_max
         )
-        val _src1 = Seq(
+      }
+      val _src1 = (0 until _box_plurality).flatMap { box_idx =>
+        Seq(
           intake.aabb(box_idx).x_min,
           intake.aabb(box_idx).y_min,
           intake.aabb(box_idx).z_min,
@@ -146,7 +159,9 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
           intake.aabb(box_idx).y_max,
           intake.aabb(box_idx).z_max
         )
-        val _src2 = Seq(
+      }
+      val _src2 = (0 until _box_plurality).flatMap { box_idx =>
+        Seq(
           intake.ray.origin.x,
           intake.ray.origin.y,
           intake.ray.origin.z,
@@ -154,8 +169,10 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
           intake.ray.origin.y,
           intake.ray.origin.z
         )
-        (_dest zip _src1 zip _src2) foreach { case ((_1, _2), _3) =>
-          val fu = Module(new AddRecFN(8, 24))
+      }
+
+      (_dest zip _src1 zip _src2 zip fu_list) foreach {
+        case (((_1, _2), _3), fu) =>
           fu.io.subOp := true.B
           fu.io.a := _2
           fu.io.b := _3
@@ -163,7 +180,6 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
           fu.io.detectTininess := _tininess_rule
           _1 := fu.io.out
         // TODO: handle exception flags!
-        }
       }
     }
 
@@ -176,6 +192,17 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
   stage_functions(4) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(true))
     emit := intake
+
+    val fu_list: List[MulAddRecFN] = List.fill(24) {
+      val fu = Module(new MulAddRecFN(8, 24))
+      fu.io.a := 0.U
+      fu.io.b := 0.U
+      fu.io.c := 0.U
+      fu.io.detectTininess := 0.U
+      fu.io.roundingMode := 0.U
+      fu.io.op := 0.U
+      fu
+    }
 
     when(intake.isTriangleOp) {
       val kx = intake.ray.kx
@@ -231,17 +258,18 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
       )
 
       // _dest = _src1 * _src2 + _src3
-      (_dest zip _src1 zip _src2 zip _src3).map { case (((_1, _2), _3), _4) =>
-        val fu = Module(new MulAddRecFN(8, 24))
-        fu.io.op := 0.U
-        fu.io.a := _2
-        fu.io.b := _3
-        fu.io.c := _4
-        fu.io.roundingMode := _rounding_rule
-        fu.io.detectTininess := _tininess_rule
+      (_dest zip _src1 zip _src2 zip _src3 zip fu_list).map {
+        case ((((_1, _2), _3), _4), fu) =>
+          // val fu = Module(new MulAddRecFN(8, 24))
+          fu.io.op := 0.U
+          fu.io.a := _2
+          fu.io.b := _3
+          fu.io.c := _4
+          fu.io.roundingMode := _rounding_rule
+          fu.io.detectTininess := _tininess_rule
 
-        _1 := fu.io.out
-      // handle exception flags!
+          _1 := fu.io.out
+        // handle exception flags!
       }
 
     }.otherwise {
@@ -254,8 +282,8 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
         float tp_max_y = child.y_max * ray.inv.y;
         float tp_max_z = child.z_max * ray.inv.z;
        */
-      for (box_idx <- 0 until _box_plurality) {
-        val _dest = Seq(
+      val _dest = (0 until _box_plurality).flatMap { box_idx =>
+        Seq(
           emit.t_min(box_idx).x,
           emit.t_min(box_idx).y,
           emit.t_min(box_idx).z,
@@ -263,7 +291,9 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
           emit.t_max(box_idx).y,
           emit.t_max(box_idx).z
         )
-        val _src1 = Seq(
+      }
+      val _src1 = (0 until _box_plurality).flatMap { box_idx =>
+        Seq(
           intake.aabb(box_idx).x_min,
           intake.aabb(box_idx).y_min,
           intake.aabb(box_idx).z_min,
@@ -271,7 +301,10 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
           intake.aabb(box_idx).y_max,
           intake.aabb(box_idx).z_max
         )
-        val _src2 = Seq(
+      }
+
+      val _src2 = (0 until _box_plurality).flatMap { box_idx =>
+        Seq(
           intake.ray.inv.x,
           intake.ray.inv.y,
           intake.ray.inv.z,
@@ -279,14 +312,17 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
           intake.ray.inv.y,
           intake.ray.inv.z
         )
-        (_dest zip _src1 zip _src2) foreach { case ((_1, _2), _3) =>
+      }
+
+      (_dest zip _src1 zip _src2 zip fu_list) foreach {
+        case (((_1, _2), _3), fu) =>
           // val fu = Module(new MulRecFN(8, 24))
           // fu.io.a := _2
           // fu.io.b := _3
           // fu.io.roundingMode := _rounding_rule
           // fu.io.detectTininess := _tininess_rule
           // _1 := fu.io.out
-          val fu = Module(new MulAddRecFN(8, 24))
+          // val fu = Module(new MulAddRecFN(8, 24))
           fu.io.op := 0.U
           fu.io.a := _2
           fu.io.b := _3
@@ -296,8 +332,8 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
 
           _1 := fu.io.out
         // TODO: handle exception flags!
-        }
       }
+
     }
 
     emit
