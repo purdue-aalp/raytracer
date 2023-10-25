@@ -53,12 +53,17 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   type HW_Box = baseline_datapath.AABB
 
   val r = new Random()
-  val N_RANDOM_TEST = 16
+  val N_RANDOM_TEST = 50000
   val PRINT_END_TIME = true
   val float_tolerance_error =
     0.001 // normalized error: 149 vs 100 would have an error of 0.49
   val use_stage_submodule = false
-  val dump_vcd_for_unified_test = false
+  val dump_vcd_for_unified_test = true
+  val test_ray_box_specific = false
+  val test_ray_triangle_specific = false
+  val test_ray_box_random = false 
+  val test_ray_triangle_random = false
+  val test_unified_random = true
 
   val chisel_test_annotations = Seq(
     VerilatorBackendAnnotation,
@@ -70,9 +75,9 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       else "cached_verilator_backend/Datapath_monolithic"
     ),
     // WriteVcdAnnotation,
-    VerilatorCFlags(Seq("-O3", "-march=native")),
-    VerilatorLinkFlags(Seq("-O3", "-march=native")),
-    VerilatorFlags(Seq("-O3", "--threads", "8"))
+    VerilatorCFlags(Seq("-O3", "-flto=24", "-march=native")),
+    VerilatorLinkFlags(Seq("-O3", "-flto=24", "-march=native")),
+    VerilatorFlags(Seq("-O3", "--threads", "16"))
   )
   val chisel_test_chisel_annotations = Seq(
     ThrowOnFirstErrorAnnotation,
@@ -371,9 +376,9 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
       test(new UnifiedDatapath_wrapper(use_stage_submodule))
         .withAnnotations(
-          // chisel_test_annotations :++
-          // {if(dump_vcd_for_unified_test){WriteVcdAnnotation::Nil} else {Nil}}
-          chisel_test_annotations
+          chisel_test_annotations :++
+          {if(dump_vcd_for_unified_test){WriteVcdAnnotation::Nil} else {Nil}}
+          // chisel_test_annotations
         )
         .withChiselAnnotations(
           chisel_test_chisel_annotations
@@ -407,6 +412,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   }
 
   // Define test cases
+  if(test_ray_box_specific){
   testRayBoxIntersection(
     "Small Ray inside box",
     (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
@@ -470,7 +476,9 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       1.0f) :: SW_Box() :: SW_Box() :: SW_Box() :: Nil) :: Nil,
     new SW_Ray(float_3(1.0f, 2.0f, 1.0f), float_3(0.0f, -1.0f, 0.0f)) :: Nil
   )
+  }
 
+  if(test_ray_triangle_specific){
   testRayTriangleIntersection(
     "Ray hits back of triangle along normal to surface",
     SW_Triangle(
@@ -583,6 +591,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       float_3(0.0f, 5.0f, 0.0f)
     ) :: Nil
   )
+  }
 
   // randomized tests
   val box_seq_for_raybox = List.fill(N_RANDOM_TEST) {
@@ -592,11 +601,13 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     RaytracerGold.genRandomRay(1e5.toFloat)
   }
 
+  if(test_ray_box_random){
   testRayBoxIntersection(
     s"${N_RANDOM_TEST} randomized rays and boxes within range -10000.0, 10000.0",
     box_seq_for_raybox,
     ray_seq_for_raybox
   )
+  }
 
   val tri_seq_for_raytriangle = List.fill(N_RANDOM_TEST)(
     RaytracerGold.genRandomTriangle(-SCENE_BOUNDS.toFloat, SCENE_BOUNDS.toFloat)
@@ -608,12 +619,16 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       SCENE_BOUNDS.toFloat
     )
   }
+
+  if(test_ray_triangle_random){
   testRayTriangleIntersection(
     s"${N_RANDOM_TEST} randomized rays and triangles within range ${SCENE_BOUNDS}",
     tri_seq_for_raytriangle,
     ray_seq_for_raytriangle
   )
+  }
 
+  if(test_unified_random){
   testUnifiedIntersection(
     "unified intersection test",
     ray_seq_for_raybox :++ ray_seq_for_raytriangle,
@@ -627,5 +642,6 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       ray_seq_for_raytriangle.length
     )(true)
   )
+  }
 
 }
