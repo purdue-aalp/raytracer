@@ -41,7 +41,7 @@ class SkidBufferStageTest extends AnyFreeSpec with ChiselScalatestTester {
   val val_seq: List[Int] = List.from(0 until SEQ_LENGTH)
 
   "skidbuffer stage should pass through identical values from 0 to 1000 when both ends are free" in {
-    test(new SkidBufferStage(UInt(10.W)))
+    test(SkidBufferStage(UInt(10.W)))
       .withAnnotations(chisel_test_annotations)
       .withChiselAnnotations(chisel_test_chisel_annotations) { dut =>
         dut.intake.initSource().setSourceClock(dut.clock)
@@ -56,7 +56,7 @@ class SkidBufferStageTest extends AnyFreeSpec with ChiselScalatestTester {
   }
 
   "skidbuffer stage should pass through identical values from 0 to 1000 when emit is congested" in {
-    test(new SkidBufferStage(UInt(10.W)))
+    test(SkidBufferStage(UInt(10.W)))
       .withAnnotations(chisel_test_annotations)
       .withChiselAnnotations(chisel_test_chisel_annotations) { dut =>
         dut.intake.initSource().setSourceClock(dut.clock)
@@ -79,7 +79,7 @@ class SkidBufferStageTest extends AnyFreeSpec with ChiselScalatestTester {
   }
 
   "skidbuffer stage should pass through identical values from 0 to 1000 when intake is throttled" in {
-    test(new SkidBufferStage(UInt(10.W)))
+    test(SkidBufferStage(UInt(10.W)))
       .withAnnotations(chisel_test_annotations)
       .withChiselAnnotations(chisel_test_chisel_annotations) { dut =>
         dut.intake.initSource().setSourceClock(dut.clock)
@@ -101,7 +101,7 @@ class SkidBufferStageTest extends AnyFreeSpec with ChiselScalatestTester {
   }
 
   "skidbuffer stage should pass through identical values from 0 to 1000 when intake is throttled and emit is congested" in {
-    test(new SkidBufferStage(UInt(10.W)))
+    test(SkidBufferStage(UInt(10.W)))
       .withAnnotations(chisel_test_annotations)
       .withChiselAnnotations(chisel_test_chisel_annotations) { dut =>
         dut.intake.initSource().setSourceClock(dut.clock)
@@ -133,7 +133,7 @@ class SkidBufferStageTest extends AnyFreeSpec with ChiselScalatestTester {
     def square_uint(x: UInt): UInt = {
       x * x
     }
-    test(new SkidBufferStage(UInt(10.W), square_uint))
+    test(SkidBufferStage(UInt(10.W), square_uint))
       .withAnnotations(chisel_test_annotations)
       .withChiselAnnotations(chisel_test_chisel_annotations) { dut =>
         dut.intake.initSource().setSourceClock(dut.clock)
@@ -166,13 +166,13 @@ class SkidBufferStageTest extends AnyFreeSpec with ChiselScalatestTester {
     val emit = IO(Decoupled(UInt(10.W)))
 
     val stage1 = Module(
-      new SkidBufferStage(UInt(10.W), { (x: UInt) => x + 9.U })
+      SkidBufferStage(UInt(10.W), { (x: UInt) => x + 9.U })
     ).suggestName("stage1")
     val stage2 = Module(
-      new SkidBufferStage(UInt(10.W), { (x: UInt) => x * 11.U })
+      SkidBufferStage(UInt(10.W), { (x: UInt) => x * 11.U })
     ).suggestName("stage2")
     val stage3 = Module(
-      new SkidBufferStage(UInt(10.W), { (x: UInt) => x - 9.U })
+      SkidBufferStage(UInt(10.W), { (x: UInt) => x - 9.U })
     ).suggestName("stage3")
 
     stage1.intake :<>= intake
@@ -218,7 +218,7 @@ class SkidBufferStageTest extends AnyFreeSpec with ChiselScalatestTester {
 
     // UInt => Bool
     val stage1 = Module(
-      new GenerializedSkidBufferStage(
+      GenerializedSkidBufferStage(
         UInt(10.W),
         Bool(),
         { (x: UInt) => x(0).asBool }
@@ -239,7 +239,7 @@ class SkidBufferStageTest extends AnyFreeSpec with ChiselScalatestTester {
       }
     }
     val stage2 = Module(
-      new GenerializedSkidBufferStage(
+      GenerializedSkidBufferStage(
         Bool(),
         UInt(10.W),
         stage2_module_helper.apply
@@ -260,7 +260,7 @@ class SkidBufferStageTest extends AnyFreeSpec with ChiselScalatestTester {
       }
     }
     val stage3 = Module(
-      new GenerializedSkidBufferStage(
+      GenerializedSkidBufferStage(
         UInt(10.W),
         SInt(10.W),
         stage3_module_helper.apply

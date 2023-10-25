@@ -661,11 +661,13 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
   //     stage_registers(idx) := stage_comb_module.emit
   //   }
   // }
-  val stage_modules = stage_functions.zipWithIndex.map { case (optF, idx) =>
+  val stage_modules: Seq[
+    SkidBufferStageModule[ExtendedPipelineBundle, ExtendedPipelineBundle]
+  ] = stage_functions.toSeq.zipWithIndex.map { case (optF, idx) =>
     val stage = optF match {
       case Some(f) =>
-        Module(new SkidBufferStage(new ExtendedPipelineBundle(true), f))
-      case None => Module(new SkidBufferStage(new ExtendedPipelineBundle(true)))
+        Module(SkidBufferStage(new ExtendedPipelineBundle(true), f))
+      case None => Module(SkidBufferStage(new ExtendedPipelineBundle(true)))
     }
     stage.suggestName(s"stage_${idx}")
     stage
@@ -683,7 +685,7 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
   // stage 1 is deprecated, since we have skid buffers now
   // stage 2 converts FN to RecFN, so need a more generic SkidBufferStage
   val stage_2_actual_module = Module(
-    new GenerializedSkidBufferStage(
+    GenerializedSkidBufferStage(
       new CombinedRayBoxTriangleBundle(false),
       new ExtendedPipelineBundle(true),
       { (input: CombinedRayBoxTriangleBundle) =>
@@ -745,7 +747,7 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
   // out.bits.t_num := fNFromRecFN(8, 24, stage_registers(10).bits.t_num)
   // out.bits.triangle_hit := stage_registers(10).bits.triangle_hit
   val output_stage = Module(
-    new GenerializedSkidBufferStage(
+    GenerializedSkidBufferStage(
       new ExtendedPipelineBundle(true),
       new UnifiedDatapathOutput(false),
       { (input: ExtendedPipelineBundle) =>
@@ -760,7 +762,7 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
         output
       }
     )
-  )
+  ).suggestName("stage_for_output")
   output_stage.intake :<>= stage_modules(10).emit
   out :<>= output_stage.emit
 }

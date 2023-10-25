@@ -62,12 +62,12 @@ class ChainedSkidBufferStages extends Module {
   val intake = IO(Flipped(Decoupled(UInt(10.W))))
   val emit = IO(Decoupled(UInt(10.W)))
 
-  val stage1 = Module(new SkidBufferStage(UInt(10.W), { (x: UInt) => x + 9.U }))
+  val stage1 = Module(SkidBufferStage(UInt(10.W), { (x: UInt) => x + 9.U }))
     .suggestName("stage1")
-  val stage2 = Module(
-    new SkidBufferStage(UInt(10.W), { (x: UInt) => x * 11.U })
-  ).suggestName("stage2")
-  val stage3 = Module(new SkidBufferStage(UInt(10.W), { (x: UInt) => x - 9.U }))
+  val stage2 =
+    Module(SkidBufferStage(UInt(10.W), { (x: UInt) => x * 11.U }))
+      .suggestName("stage2")
+  val stage3 = Module(SkidBufferStage(UInt(10.W), { (x: UInt) => x - 9.U }))
     .suggestName("stage3")
 
   stage1.intake :<>= intake
