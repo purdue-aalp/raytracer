@@ -631,78 +631,127 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
   ///////////////////
 
   // This is the conveyor belt between stages.
-  val stage_registers = Reg(
-    Vec(_stage_count, Valid(new ExtendedPipelineBundle(recorded_float = true)))
-  )
+  // val stage_registers = Reg(
+  //   Vec(_stage_count, Valid(new ExtendedPipelineBundle(recorded_float = true)))
+  // )
 
   // chain up the stages!
   // Either apply the specified transformation, or default identity function, on
   // each stage's input
-  for (idx <- 1 until _stage_count) {
-    if (!submodule_for_stage) {
-      stage_registers(idx).bits := stage_functions(idx).getOrElse(
-        (x: ExtendedPipelineBundle) => identity(x)
-      )(stage_registers(idx - 1).bits)
-      stage_registers(idx).valid := stage_registers(idx-1).valid
-    } else {
-      // the following code creates an anonymous module for each stage
-      val stage_comb_module = Module(new Module {
-        val intake = IO(Flipped(Valid(new ExtendedPipelineBundle(true))))
-        val emit = IO(Valid(new ExtendedPipelineBundle(true)))
-        val transform_function =
-          stage_functions(idx).getOrElse((x: ExtendedPipelineBundle) =>
-            identity(x)
-          )
-        emit.bits := transform_function(intake.bits)
-        emit.valid := intake.valid
-      })
-      stage_comb_module.suggestName(s"stage_comb_module_${idx}")
-      stage_comb_module.intake := stage_registers(idx - 1)
-      stage_registers(idx) := stage_comb_module.emit
+  // for (idx <- 1 until _stage_count) {
+  //   if (!submodule_for_stage) {
+  //     stage_registers(idx).bits := stage_functions(idx).getOrElse(
+  //       (x: ExtendedPipelineBundle) => identity(x)
+  //     )(stage_registers(idx - 1).bits)
+  //     stage_registers(idx).valid := stage_registers(idx-1).valid
+  //   } else {
+  //     // the following code creates an anonymous module for each stage
+  //     val stage_comb_module = Module(new Module {
+  //       val intake = IO(Flipped(Valid(new ExtendedPipelineBundle(true))))
+  //       val emit = IO(Valid(new ExtendedPipelineBundle(true)))
+  //       val transform_function =
+  //         stage_functions(idx).getOrElse((x: ExtendedPipelineBundle) =>
+  //           identity(x)
+  //         )
+  //       emit.bits := transform_function(intake.bits)
+  //       emit.valid := intake.valid
+  //     })
+  //     stage_comb_module.suggestName(s"stage_comb_module_${idx}")
+  //     stage_comb_module.intake := stage_registers(idx - 1)
+  //     stage_registers(idx) := stage_comb_module.emit
+  //   }
+  // }
+  val stage_modules = stage_functions.zipWithIndex.map{case(optF, idx) => 
+    val stage = optF match{
+      case Some(f) => Module(new SkidBufferStage(new ExtendedPipelineBundle(true), f))  
+      case None => Module(new SkidBufferStage(new ExtendedPipelineBundle(true)))
     }
+    stage.suggestName(s"stage_${idx}") 
+    stage
   }
+
+  val _last_stage_emit_port = stage_modules.foldLeft(WireDefault(0.U.asTypeOf(Decoupled(new ExtendedPipelineBundle(true))))){case(w, s)=>
+    s.intake :<>= w 
+    s.emit  
+  }
+  _last_stage_emit_port.ready := true.B
+
+  // now that all stages are chained up, overwrite the first few stages
+  // stage 1 is deprecated, since we have skid buffers now
+  // stage 2 converts FN to RecFN, so need a more generic SkidBufferStage
+  val stage_2_actual_module = Module(new GenerializedSkidBufferStage(
+    new CombinedRayBoxTriangleBundle(false),
+    new ExtendedPipelineBundle(true),
+    {(input: CombinedRayBoxTriangleBundle) => 
+      val output = WireDefault(0.U.asTypeOf(new ExtendedPipelineBundle(true)))
+      output.isTriangleOp := input.isTriangleOp 
+      output.ray := RayConvertFNtoRecFN(input.ray)
+      output.triangle := TriangleConvertFNtoRecFN(input.triangle)
+      (output.aabb zip input.aabb).map{case(reg_o, reg_i) => reg_o := AABBConvertFNtoRecFN(reg_i)}
+      output
+    }
+  )).suggestName(s"stage_2_actual") 
+
+  stage_2_actual_module.intake :<>= in
+  stage_modules(3).intake :<>= stage_2_actual_module.emit
 
   // zero-th element is useless
-  stage_registers(0) := 0.U.asTypeOf(stage_registers(0))
+  // stage_registers(0) := 0.U.asTypeOf(stage_registers(0))
 
-  // first element is useless too, because the first stage is "register input"
-  // stage, the values are still non-recorded float. See
-  // `stage_registers_1_actual` instead.
-  stage_registers(1) := 0.U.asTypeOf(stage_registers(0))
+  // // first element is useless too, because the first stage is "register input"
+  // // stage, the values are still non-recorded float. See
+  // // `stage_registers_1_actual` instead.
+  // stage_registers(1) := 0.U.asTypeOf(stage_registers(0))
 
-  // override the driver logic for stage_registers 1 and 2
-  val stage_registers_1_actual = Reg(
-    Valid(new CombinedRayBoxTriangleBundle(false))
-  )
-  stage_registers_1_actual.valid := in.fire
-  stage_registers_1_actual.bits := in.bits
+  // // override the driver logic for stage_registers 1 and 2
+  // val stage_registers_1_actual = Reg(
+  //   Valid(new CombinedRayBoxTriangleBundle(false))
+  // )
+  // stage_registers_1_actual.valid := in.fire
+  // stage_registers_1_actual.bits := in.bits
 
-  stage_registers(2).valid := stage_registers_1_actual.valid
-  stage_registers(
-    2
-  ).bits.isTriangleOp := stage_registers_1_actual.bits.isTriangleOp
-  stage_registers(2).bits.ray := RayConvertFNtoRecFN(
-    stage_registers_1_actual.bits.ray
-  )
-  (stage_registers(2).bits.aabb zip stage_registers_1_actual.bits.aabb).map {
-    case (reg_2, reg_1) =>
-      reg_2 := AABBConvertFNtoRecFN(reg_1)
-  }
-  stage_registers(2).bits.triangle := TriangleConvertFNtoRecFN(
-    stage_registers_1_actual.bits.triangle
-  )
+  // stage_registers(2).valid := stage_registers_1_actual.valid
+  // stage_registers(
+  //   2
+  // ).bits.isTriangleOp := stage_registers_1_actual.bits.isTriangleOp
+  // stage_registers(2).bits.ray := RayConvertFNtoRecFN(
+  //   stage_registers_1_actual.bits.ray
+  // )
+  // (stage_registers(2).bits.aabb zip stage_registers_1_actual.bits.aabb).map {
+  //   case (reg_2, reg_1) =>
+  //     reg_2 := AABBConvertFNtoRecFN(reg_1)
+  // }
+  // stage_registers(2).bits.triangle := TriangleConvertFNtoRecFN(
+  //   stage_registers_1_actual.bits.triangle
+  // )
 
   ////////////////////////
   // TAP OUTPUT FROM LAST MEANINGFUL STAGE'S REGISTER
   /////////////////////////
 
-  // out.bits := 0.U.asTypeOf((out.bits))
-  out.valid := stage_registers(10).valid
-  out.bits.isTriangleOp := stage_registers(10).bits.isTriangleOp
-  out.bits.tmin_out := stage_registers(10).bits.tmin.map(fNFromRecFN(8, 24, _))
-  out.bits.isIntersect := stage_registers(10).bits.isIntersect
-  out.bits.boxIndex := stage_registers(10).bits.boxIndex
-  out.bits.t_denom := fNFromRecFN(8, 24, stage_registers(10).bits.t_denom)
-  out.bits.t_num := fNFromRecFN(8, 24, stage_registers(10).bits.t_num)
-  out.bits.triangle_hit := stage_registers(10).bits.triangle_hit
+  // out.valid := stage_registers(10).valid
+  // out.bits.isTriangleOp := stage_registers(10).bits.isTriangleOp
+  // out.bits.tmin_out := stage_registers(10).bits.tmin.map(fNFromRecFN(8, 24, _))
+  // out.bits.isIntersect := stage_registers(10).bits.isIntersect
+  // out.bits.boxIndex := stage_registers(10).bits.boxIndex
+  // out.bits.t_denom := fNFromRecFN(8, 24, stage_registers(10).bits.t_denom)
+  // out.bits.t_num := fNFromRecFN(8, 24, stage_registers(10).bits.t_num)
+  // out.bits.triangle_hit := stage_registers(10).bits.triangle_hit
+  val output_stage = Module(new GenerializedSkidBufferStage(
+    new ExtendedPipelineBundle(true),
+    new UnifiedDatapathOutput(false),
+    {(input: ExtendedPipelineBundle) =>
+      val output = Wire(new UnifiedDatapathOutput(false))
+      output.isTriangleOp := input.isTriangleOp
+      output.tmin_out := input.tmin.map(fNFromRecFN(8, 24, _))
+      output.isIntersect := input.isIntersect
+      output.boxIndex := input.boxIndex
+      output.t_denom := fNFromRecFN(8, 24, input.t_denom)
+      output.t_num := fNFromRecFN(8, 24, input.t_num)
+      output.triangle_hit := input.triangle_hit
+      output
+    }
+  ))
+  output_stage.intake :<>= stage_modules(10).emit
+  out :<>= output_stage.emit
 }
