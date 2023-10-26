@@ -104,7 +104,7 @@ class EnhancedInputBundle(
     element_count: Int = 16
 ) extends CombinedRayBoxTriangleBundle(recorded_float) {
 
-  // perform euclicean distance calculation if true,
+  // perform euclidean distance calculation if true,
   // otherwise might be ray-box/ray-triangle tests
   val isEuclidean = Bool()
 

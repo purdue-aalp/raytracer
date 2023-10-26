@@ -110,11 +110,38 @@ case class SW_Triangle(
   )
 }
 
+class SW_Vector(val elements: Seq[Float]){
+  val dim = elements.size
+
+  def get_elements(): Seq[Float] = elements
+
+  override def toString(): String = {
+    elements.foldLeft("("){case(str, ele)=>str + s"${ele}, "} + ")"
+  }
+}
+
+object SW_Vector{
+  val DEFAULT_SIZE = 16
+  def apply(elements: Seq[Float] = Seq.fill[Float](DEFAULT_SIZE)(0.0f)) = {
+    new SW_Vector(elements = elements)
+  }
+}
+
 case class SW_CombinedData(
     val ray: SW_Ray,
     val boxes: Seq[SW_Box],
     val triangle: SW_Triangle,
     val isTriangleOp: Boolean
+)
+
+case class SW_EnhancedCombinedData(
+    val ray: SW_Ray,
+    val boxes: Seq[SW_Box],
+    val triangle: SW_Triangle,
+    val vector_a: SW_Vector,
+    val vector_b: SW_Vector,
+    val isTriangleOp: Boolean,
+    val isEuclidean: Boolean
 )
 
 case class SW_RayBox_Result(
