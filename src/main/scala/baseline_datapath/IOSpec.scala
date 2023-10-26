@@ -97,6 +97,21 @@ class CombinedRayBoxTriangleBundle(recorded_float: Boolean = false)
   val isTriangleOp = Bool()
 }
 
+/// Element count is how many elements to calculate euclidean distance for, in
+/// each cycle.
+class EnhancedInputBundle(
+    recorded_float: Boolean = false,
+    element_count: Int = 16
+) extends CombinedRayBoxTriangleBundle(recorded_float) {
+
+  // perform euclicean distance calculation if true,
+  // otherwise might be ray-box/ray-triangle tests
+  val isEuclidean = Bool()
+
+  val euclidean_a = Vec(element_count, Bits(_bit_width))
+  val euclidean_b = Vec(element_count, Bits(_bit_width))
+}
+
 class UnifiedDatapathOutput(recorded_float: Boolean = false) extends Bundle {
   val _bit_width = if (recorded_float) 33.W else 32.W
 
