@@ -22,46 +22,48 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
     Flipped(Decoupled(new CombinedRayBoxTriangleBundle(recorded_float = false)))
   )
 
-  // output is not registered, it is driven by logic
+  // output is also registered by the last stage's output buffer
   val out = IO(
     Decoupled(new UnifiedDatapathOutput(recorded_float = false))
   )
 
-  // always ready to accept jobs each cycle
-  in.ready := WireDefault(true.B)
-
   // A cycle counter, that we can use when debugging the module
-  // It shall disappear in synthesis, so no PPA impact
+  // It shall disappear in synthesis, so no PPA impact (provided we don't expose
+  // _time when instantiating the top-level module)
   val (_time, _) = Counter(true.B, (1 << 31) - 1)
   dontTouch(_time)
 
   /////////////////
   // SOME CONSTANTS
   /////////////
-  val _stage_count = 12;
+  val _max_stage_count = 12;
   val _box_plurality =
-    in.bits.aabb.length // this should be a Chisel elaboration-time known variable
+    in.bits.aabb.length // this is a variable known at Chisel elaboration time
   val _rounding_rule = consts.round_near_even
   val _tininess_rule = consts.tininess_beforeRounding
 
   /////////////////
   // STAGE BEHAVIOR
-  ///////////////////
+  //////////////////
 
-  // Define the behavior of each stage as functions.
-  // Register their output to the "converyor belt" shift register.
-  // Synopsys: stage_register(idx) := stage_function(idx)(stage_register(idx-1))
+  // Stage dataflow (how to transform input to output) is decoupled from stage control
+  // (whether to block for a cycle).
+
+  // Below, the dataflow logic is specified. The stage control is implemented by
+  // GeneralizedSkidBufferStage.
 
   // Each element of this array is an Option, that wraps a function object which
-  // maps a Valid[ExtendedPipelineBundle] to a Valid[ExtendedPipelineBundle]
+  // maps an input ExtendedPipelineBundle to an output ExtendedPipelineBundle
   val stage_functions = collection.mutable.ArrayBuffer.fill[Option[
     ExtendedPipelineBundle => ExtendedPipelineBundle
-  ]](_stage_count)(None)
+  ]](_max_stage_count)(None)
 
   // Define the functions!
   // stage 0 does not exist
-  // stage 1 is register input
-  // stage 2 is convert float32 to float33
+  // stage 1 also doesn't exist, but kept for consistenty
+  // stage 2 converts float32 to float33 (specified separately at the bottom, because the
+  // function signature is different)
+
   // stage 3 performs 24 adds for ray-box, or 9 adds for ray-triangle, to
   // translate the geometries to the origin of the ray
   stage_functions(3) = Some({ intake =>
@@ -186,9 +188,9 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
     emit
   })
 
-  // stage 4 performs 24 mul-adds for ray-box to find out the time intersection
+  // stage 4 performs 24 muls for ray-box to find out the time intersection
   // intervals, or 9 mul-adds for ray-triangle to perform shear and scale of
-  // triangle vertices
+  // triangle vertices. FMAD units are used for both.
   stage_functions(4) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(true))
     emit := intake
@@ -527,8 +529,6 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
     val emit = Wire(new ExtendedPipelineBundle(true))
     emit := intake
 
-    // printf(cf"${_time}: stage 10 intake is valid? ${intake.valid}\n")
-
     when(intake.isTriangleOp) {
       val _src1 = Seq(
         intake.U,
@@ -636,8 +636,6 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
 
         isIntersect_intermediate(box_idx) := comp_tmin_tmax.io.lt
       }
-      // printf(cf"${_time}: tpmin is ${emit.t_min}, tpmax is ${emit.t_max}\n")
-      // printf(cf"${_time}: tmin_intermediate is ${tmin_intermediate}\n")
 
       val tmin_but_substitute_non_intersect_with_PInf =
         tmin_intermediate.zip(isIntersect_intermediate).map {
@@ -666,37 +664,9 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
   // STAGE REGISTERS
   ///////////////////
 
-  // This is the conveyor belt between stages.
-  // val stage_registers = Reg(
-  //   Vec(_stage_count, Valid(new ExtendedPipelineBundle(recorded_float = true)))
-  // )
+  // Instantiate the skid-capable pipeline stages and wrap the dataflow logic
+  // specified above, or wrap the identity function by default.
 
-  // chain up the stages!
-  // Either apply the specified transformation, or default identity function, on
-  // each stage's input
-  // for (idx <- 1 until _stage_count) {
-  //   if (!submodule_for_stage) {
-  //     stage_registers(idx).bits := stage_functions(idx).getOrElse(
-  //       (x: ExtendedPipelineBundle) => identity(x)
-  //     )(stage_registers(idx - 1).bits)
-  //     stage_registers(idx).valid := stage_registers(idx-1).valid
-  //   } else {
-  //     // the following code creates an anonymous module for each stage
-  //     val stage_comb_module = Module(new Module {
-  //       val intake = IO(Flipped(Valid(new ExtendedPipelineBundle(true))))
-  //       val emit = IO(Valid(new ExtendedPipelineBundle(true)))
-  //       val transform_function =
-  //         stage_functions(idx).getOrElse((x: ExtendedPipelineBundle) =>
-  //           identity(x)
-  //         )
-  //       emit.bits := transform_function(intake.bits)
-  //       emit.valid := intake.valid
-  //     })
-  //     stage_comb_module.suggestName(s"stage_comb_module_${idx}")
-  //     stage_comb_module.intake := stage_registers(idx - 1)
-  //     stage_registers(idx) := stage_comb_module.emit
-  //   }
-  // }
   val stage_modules: Seq[
     SkidBufferStageModule[ExtendedPipelineBundle, ExtendedPipelineBundle]
   ] = stage_functions.toSeq.zipWithIndex.map { case (optF, idx) =>
@@ -709,6 +679,10 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
     stage
   }
 
+  // Chain up the stages and (literally) tie the loose end.
+  // We feed all-zero to stage 0. It's okay, because we will be overriding
+  // the connections by routing the module input to stage_2_actual, and route
+  // stage_2_actual to stage 3
   val _last_stage_emit_port = stage_modules.foldLeft(
     WireDefault(0.U.asTypeOf(Decoupled(new ExtendedPipelineBundle(true))))
   ) { case (w, s) =>
@@ -719,7 +693,7 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
 
   // now that all stages are chained up, overwrite the first few stages
   // stage 1 is deprecated, since we have skid buffers now
-  // stage 2 converts FN to RecFN, so need a more generic SkidBufferStage
+  // stage 2 converts FN to RecFN, so we need a more generic SkidBufferStage
   val stage_2_actual_module = Module(
     GenerializedSkidBufferStage(
       new CombinedRayBoxTriangleBundle(false),
@@ -740,48 +714,11 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
   stage_2_actual_module.intake :<>= in
   stage_modules(3).intake :<>= stage_2_actual_module.emit
 
-  // zero-th element is useless
-  // stage_registers(0) := 0.U.asTypeOf(stage_registers(0))
-
-  // // first element is useless too, because the first stage is "register input"
-  // // stage, the values are still non-recorded float. See
-  // // `stage_registers_1_actual` instead.
-  // stage_registers(1) := 0.U.asTypeOf(stage_registers(0))
-
-  // // override the driver logic for stage_registers 1 and 2
-  // val stage_registers_1_actual = Reg(
-  //   Valid(new CombinedRayBoxTriangleBundle(false))
-  // )
-  // stage_registers_1_actual.valid := in.fire
-  // stage_registers_1_actual.bits := in.bits
-
-  // stage_registers(2).valid := stage_registers_1_actual.valid
-  // stage_registers(
-  //   2
-  // ).bits.isTriangleOp := stage_registers_1_actual.bits.isTriangleOp
-  // stage_registers(2).bits.ray := RayConvertFNtoRecFN(
-  //   stage_registers_1_actual.bits.ray
-  // )
-  // (stage_registers(2).bits.aabb zip stage_registers_1_actual.bits.aabb).map {
-  //   case (reg_2, reg_1) =>
-  //     reg_2 := AABBConvertFNtoRecFN(reg_1)
-  // }
-  // stage_registers(2).bits.triangle := TriangleConvertFNtoRecFN(
-  //   stage_registers_1_actual.bits.triangle
-  // )
-
   ////////////////////////
-  // TAP OUTPUT FROM LAST MEANINGFUL STAGE'S REGISTER
+  // TAP OUTPUT FROM LAST MEANINGFUL STAGE'S OUTPUT BUFFER
   /////////////////////////
 
-  // out.valid := stage_registers(10).valid
-  // out.bits.isTriangleOp := stage_registers(10).bits.isTriangleOp
-  // out.bits.tmin_out := stage_registers(10).bits.tmin.map(fNFromRecFN(8, 24, _))
-  // out.bits.isIntersect := stage_registers(10).bits.isIntersect
-  // out.bits.boxIndex := stage_registers(10).bits.boxIndex
-  // out.bits.t_denom := fNFromRecFN(8, 24, stage_registers(10).bits.t_denom)
-  // out.bits.t_num := fNFromRecFN(8, 24, stage_registers(10).bits.t_num)
-  // out.bits.triangle_hit := stage_registers(10).bits.triangle_hit
+  // the output stage also contains special logic: to convert RecFN to FN
   val output_stage = Module(
     GenerializedSkidBufferStage(
       new ExtendedPipelineBundle(true),
@@ -799,6 +736,7 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
       }
     )
   ).suggestName("stage_for_output")
+
   output_stage.intake :<>= stage_modules(10).emit
   out :<>= output_stage.emit
 }
