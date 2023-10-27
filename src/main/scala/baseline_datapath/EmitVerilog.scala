@@ -58,6 +58,11 @@ class Bar(
   out := convert.io.out
 }
 
+class TestBundle extends Bundle{
+  val normal = Vec(2, UInt(8.W))
+  val weird = Vec(2, UInt(0.W))
+}
+
 class ChainedSkidBufferStages extends Module {
   val intake = IO(Flipped(Decoupled(UInt(10.W))))
   val emit = IO(Decoupled(UInt(10.W)))
@@ -69,6 +74,13 @@ class ChainedSkidBufferStages extends Module {
       .suggestName("stage2")
   val stage3 = Module(SkidBufferStage(UInt(10.W), { (x: UInt) => x - 9.U }))
     .suggestName("stage3")
+
+  val test_bundle = Wire(new TestBundle)
+  test_bundle.normal(0) := stage3.emit.bits
+  test_bundle.normal(1) := stage3.emit.bits
+  test_bundle.weird(0) := stage1.emit.bits
+  test_bundle.weird(1) := stage1.emit.bits
+  dontTouch(test_bundle)
 
   stage1.intake :<>= intake
   stage2.intake :<>= stage1.emit

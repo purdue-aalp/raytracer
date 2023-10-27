@@ -6,6 +6,15 @@ import chisel3.experimental.VecLiterals._ // for VecLit
 import chisel3.util._
 import chisel3.experimental.dataview._
 
+case class RaytracerParams(
+  // What format the FP numbers in IO is. 
+  // 32-bit IEEE-754 compliant float if false, 33-bit recorded format if true 
+  io_recorded_float: Boolean = false,
+
+  // No euclidean support if None, else supports processing X dimensions per cycle given Some(X)
+  support_euclidean: Option[Int] = None
+)
+
 object DatapathConstants {
   def _zero_RecFN = recFNFromFN(8, 24, 0x0.U)
   def _neg_1_0_RecFN = recFNFromFN(8, 24, 0xbf800000.S)
@@ -14,12 +23,15 @@ object DatapathConstants {
   def _positive_inf_RecFN = recFNFromFN(8, 24, 0x7f800000.S)
 }
 
-class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
+class UnifiedDatapath(p: RaytracerParams) extends Module {
   import DatapathConstants._
+
+  // For now, we don't support recorded-format Input
+  assert(p.io_recorded_float == false)
 
   // input is guaranteed to be registered by this module
   val in = IO(
-    Flipped(Decoupled(new CombinedRayBoxTriangleBundle(recorded_float = false)))
+    Flipped(Decoupled(new EnhancedInputBundle(recorded_float = false, element_count = 16)))
   )
 
   // output is also registered by the last stage's output buffer
@@ -696,9 +708,10 @@ class UnifiedDatapath(submodule_for_stage: Boolean = true) extends Module {
   // stage 2 converts FN to RecFN, so we need a more generic SkidBufferStage
   val stage_2_actual_module = Module(
     GenerializedSkidBufferStage(
-      new CombinedRayBoxTriangleBundle(false),
+      // new CombinedRayBoxTriangleBundle(false),
+      new EnhancedInputBundle(false, 16),
       new ExtendedPipelineBundle(true),
-      { (input: CombinedRayBoxTriangleBundle) =>
+      { (input: EnhancedInputBundle) =>
         val output = WireDefault(0.U.asTypeOf(new ExtendedPipelineBundle(true)))
         output.isTriangleOp := input.isTriangleOp
         output.ray := RayConvertFNtoRecFN(input.ray)

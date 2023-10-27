@@ -138,9 +138,9 @@ case class SW_EnhancedCombinedData(
     val ray: SW_Ray,
     val boxes: Seq[SW_Box],
     val triangle: SW_Triangle,
+    val isTriangleOp: Boolean,
     val vector_a: SW_Vector,
     val vector_b: SW_Vector,
-    val isTriangleOp: Boolean,
     val isEuclidean: Boolean
 )
 
