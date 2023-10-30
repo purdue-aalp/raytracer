@@ -19,14 +19,14 @@
 | Stage | FU used by Raytriangle | FU used by Raybox | FU used by Euclidian |
 | ---   | ---   | ---   | --- | 
 |1      | NA    | NA    | NA |
-|2      | NA    | NA    | NA |
+|2      |FP reformat|FP reformat|FP reformat|
 |3      |9 Adds     |**24 Adds**  | 16 Adds |
 |4      |9 Muls     | **24 Muls** | 16 Muls |
-|4 1/2  |**9 Adds** | 0           | 8 Adds  |
-|5      |**6 Muls** | 0           |0        |
-|6      |  3 Adds   |0            |**4 Adds**|
-|7      |**3 Muls** |0            |0        |
-|8      |**2 Adds** |0            |2 Adds   |
-|9      |**2 Adds** |0            |1 Add    |
-|10     |**5 Compare**|**12 CAS, 8 min/max**, 4 Compare|**1 Add**| 
-|10 1/2 |0          |2 QuadSort   |0        |
+|5      |6 Adds     | 0           |**8 Adds**|
+|6      |**6 Muls** | 0           |0        |
+|7      |  3 Adds   |0            |**4 Adds**|
+|8      |**3 Muls** |0            |0        |
+|9      |**2 Adds** |0            |2 Adds   |
+|10      |**2 Adds** |0            |1 Add    |
+|11     |**5 Compare**|**12 CAS, 8 min/max**, 4 Compare, **2 QuadSort**|**1 Add**|
+|12 | FP reformat|FP reformat|FP reformat|

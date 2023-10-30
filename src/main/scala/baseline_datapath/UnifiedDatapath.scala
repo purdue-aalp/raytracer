@@ -602,6 +602,16 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   stage_functions(11) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(true))
     emit := intake
+
+
+    val comparator_fu_list = Seq.fill(5){
+      val fu = Module(new CompareRecFN(8, 24))
+      fu.io.a := 0.U 
+      fu.io.b := 0.U 
+      fu.io.signaling := true.B
+      fu
+    }
+
     switch(intake.opcode) {
       is(UnifiedDatapathOpCode.OpTriangle) {
         val _src1 = Seq(
@@ -612,7 +622,9 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           intake.t_num
         )
         val _src2 = Seq.fill(5)(_zero_RecFN)
-        val _fu = Seq.fill(5)(Module(new CompareRecFN(8, 24)))
+
+        // a reference to the comparators' list
+        val _fu = comparator_fu_list
 
         (_src1 zip _src2 zip _fu).map { case ((_1, _2), _3) =>
           _3.io.a := _1
@@ -705,7 +717,9 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
 
           // if there's overlap between [tmin, inf) and (-inf, tmax], we say ray-box
           // intersection happens
-          val comp_tmin_tmax = Module(new CompareRecFN(8, 24))
+
+          // a reference to one of the comparators
+          val comp_tmin_tmax = comparator_fu_list(box_idx)
           comp_tmin_tmax.io.a := tmin_intermediate(box_idx)
           comp_tmin_tmax.io.b := tmax_intermediate(box_idx)
           comp_tmin_tmax.io.signaling := true.B
