@@ -2,6 +2,15 @@ package baseline_datapath.raytracer_gold
 
 import scala.math._
 
+object SW_Opcode extends Enumeration {
+  type SW_Opcode = Value
+  val SW_OpTriangle = Value(0)
+  val SW_OpQuadbox = Value(1)
+  val SW_OpEuclidean = Value(2)
+}
+
+import SW_Opcode._
+
 case class float_3(
     val x: Float,
     val y: Float,
@@ -110,17 +119,17 @@ case class SW_Triangle(
   )
 }
 
-class SW_Vector(val elements: Seq[Float]){
+class SW_Vector(val elements: Seq[Float]) {
   val dim = elements.size
 
   def get_elements(): Seq[Float] = elements
 
   override def toString(): String = {
-    elements.foldLeft("("){case(str, ele)=>str + s"${ele}, "} + ")"
+    elements.foldLeft("(") { case (str, ele) => str + s"${ele}, " } + ")"
   }
 }
 
-object SW_Vector{
+object SW_Vector {
   val DEFAULT_SIZE = 16
   def apply(elements: Seq[Float] = Seq.fill[Float](DEFAULT_SIZE)(0.0f)) = {
     new SW_Vector(elements = elements)
@@ -131,17 +140,16 @@ case class SW_CombinedData(
     val ray: SW_Ray,
     val boxes: Seq[SW_Box],
     val triangle: SW_Triangle,
-    val isTriangleOp: Boolean
+    val opcode: SW_Opcode
 )
 
 case class SW_EnhancedCombinedData(
     val ray: SW_Ray,
     val boxes: Seq[SW_Box],
     val triangle: SW_Triangle,
-    val isTriangleOp: Boolean,
+    val opcode: SW_Opcode,
     val vector_a: SW_Vector,
-    val vector_b: SW_Vector,
-    val isEuclidean: Boolean
+    val vector_b: SW_Vector
 )
 
 case class SW_RayBox_Result(

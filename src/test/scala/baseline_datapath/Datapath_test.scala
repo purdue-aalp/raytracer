@@ -28,6 +28,9 @@ import chiseltest.simulator.{
   CachingDebugAnnotation
 }
 
+// SW opcode is an enumeration defined in SW_Data.scala
+import SW_Opcode._
+
 class Datapath_wrapper extends Datapath {
   import hardfloat._
   val exposed_time = expose(_time)
@@ -199,14 +202,21 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
     val ray_box_list: List[SW_EnhancedCombinedData] = List.from {
       (ray_seq zip box_seq_seq).map { case (r, bs) =>
-        SW_EnhancedCombinedData(r, bs, SW_Triangle(), false, default_vec_a, default_vec_b, false)
+        SW_EnhancedCombinedData(
+          r,
+          bs,
+          SW_Triangle(),
+          SW_OpQuadbox,
+          default_vec_a,
+          default_vec_b
+        )
       }
     }
 
     // a sequence of software gold results
     val sw_result_seq: List[SW_RayBox_Result] = {
       ray_box_list.map {
-        case SW_EnhancedCombinedData(r, bseq, t, false, _, _, false) => {
+        case SW_EnhancedCombinedData(r, bseq, t, SW_OpQuadbox, _, _) => {
           // println("calculated a sw result")
           RaytracerGold.testIntersection(r, bseq)
         }
@@ -263,14 +273,21 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       val ray_triangle_list: List[SW_EnhancedCombinedData] = List.from {
         (ray_seq zip triangle_seq).map { case (r, ts) =>
           lazy val _four_empty_boxes = Seq.fill[SW_Box](4)(SW_Box())
-          SW_EnhancedCombinedData(r, _four_empty_boxes, ts, true, SW_Vector(), SW_Vector(), false)
+          SW_EnhancedCombinedData(
+            r,
+            _four_empty_boxes,
+            ts,
+            SW_OpTriangle,
+            SW_Vector(),
+            SW_Vector()
+          )
         }
       }
 
       // a sequence of software gold results
       val sw_result_seq: List[SW_RayTriangle_Result] = {
         ray_triangle_list.map {
-          case SW_EnhancedCombinedData(r, _, t, true, _, _, false) => {
+          case SW_EnhancedCombinedData(r, _, t, SW_OpTriangle, _, _) => {
             // println("calculated a sw result")
             RaytracerGold.testTriangleIntersection(r, t)
           }
@@ -343,20 +360,27 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       ray_seq: Seq[SW_Ray],
       box_seq_seq: Seq[Seq[SW_Box]],
       triangle_seq: Seq[SW_Triangle],
-      op_seq: Seq[Boolean]
+      op_seq: Seq[SW_Opcode]
   ): Unit = {
     description in {
       val combined_data_list: List[SW_EnhancedCombinedData] = List.from {
         (ray_seq zip box_seq_seq zip triangle_seq zip op_seq).map {
           case (((ray, boxs), tri), op) =>
-            SW_EnhancedCombinedData(ray, boxs, tri, op, SW_Vector(), SW_Vector(), false)
+            SW_EnhancedCombinedData(
+              ray,
+              boxs,
+              tri,
+              op,
+              SW_Vector(),
+              SW_Vector()
+            )
         }
       }
 
       // a sequence of software gold results
       val sw_result_seq: List[SW_Unified_Result] = {
         combined_data_list.map {
-          case SW_EnhancedCombinedData(r, _, t, true, _, _, false) => {
+          case SW_EnhancedCombinedData(r, _, t, SW_OpTriangle, _, _) => {
             // println("calculated a sw result")
             SW_Unified_Result(
               true,
@@ -364,7 +388,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
               SW_RayBox_Result()
             )
           }
-          case SW_EnhancedCombinedData(r, bs, _, false, _, _, false) =>
+          case SW_EnhancedCombinedData(r, bs, _, SW_OpQuadbox, _, _) =>
             SW_Unified_Result(
               false,
               SW_RayTriangle_Result(),
@@ -645,9 +669,9 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       Seq.fill(ray_seq_for_raybox.length)(
         SW_Triangle()
       ) :++ tri_seq_for_raytriangle,
-      Seq.fill(ray_seq_for_raybox.length)(false) :++ Seq.fill(
+      Seq.fill(ray_seq_for_raybox.length)(SW_OpQuadbox) :++ Seq.fill(
         ray_seq_for_raytriangle.length
-      )(true)
+      )(SW_OpTriangle)
     )
   }
 

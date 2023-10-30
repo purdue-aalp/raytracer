@@ -58,7 +58,7 @@ class Bar(
   out := convert.io.out
 }
 
-class TestBundle extends Bundle{
+class TestBundle extends Bundle {
   val normal = Vec(2, UInt(8.W))
   val weird = Vec(2, UInt(0.W))
 }

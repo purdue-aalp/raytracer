@@ -3,6 +3,18 @@ package baseline_datapath
 import chisel3._
 import hardfloat.{recFNFromFN, fNFromRecFN}
 
+object UnifiedDatapathOpCode extends ChiselEnum {
+  /// Ray -Triangle test
+  val OpTriangle = Value
+
+  /// Ray-Box tests for four boxes
+  val OpQuadbox = Value
+
+  /// Calculate the sum-of-squares of the element-wise difference bewteen two
+  /// FP32 vectors
+  val OpEuclidean = Value
+}
+
 class Float3(recorded_float: Boolean = false) extends Bundle {
 
   /** Defines a point in three-dimensional space. With "recorded_float" being
@@ -94,7 +106,7 @@ class CombinedRayBoxTriangleBundle(recorded_float: Boolean = false)
 
   // if true, perform ray-triangle intersection test
   // if false, perform ray-box interesction tests
-  val isTriangleOp = Bool()
+  val opcode = UnifiedDatapathOpCode()
 }
 
 /// Element count is how many elements to calculate euclidean distance for, in
@@ -103,10 +115,6 @@ class EnhancedInputBundle(
     recorded_float: Boolean = false,
     element_count: Int = 16
 ) extends CombinedRayBoxTriangleBundle(recorded_float) {
-
-  // perform euclidean distance calculation if true,
-  // otherwise might be ray-box/ray-triangle tests
-  val isEuclidean = Bool()
 
   val euclidean_a = Vec(element_count, Bits(_bit_width))
   val euclidean_b = Vec(element_count, Bits(_bit_width))
@@ -117,7 +125,7 @@ class UnifiedDatapathOutput(recorded_float: Boolean = false) extends Bundle {
 
   /** Common
     */
-  val isTriangleOp = Bool()
+  val opcode = UnifiedDatapathOpCode()
 
   /** For Ray-Box intersection
     */
