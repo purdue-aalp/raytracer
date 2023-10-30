@@ -149,7 +149,8 @@ case class SW_EnhancedCombinedData(
     val triangle: SW_Triangle,
     val opcode: SW_Opcode,
     val vector_a: SW_Vector,
-    val vector_b: SW_Vector
+    val vector_b: SW_Vector,
+    val reset_accum: Boolean
 )
 
 case class SW_RayBox_Result(

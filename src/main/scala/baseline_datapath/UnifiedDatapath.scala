@@ -93,9 +93,9 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
       val fu = Module(new AddRecFN(8, 24))
       fu.io.a := 0.U
       fu.io.b := 0.U
-      fu.io.detectTininess := 0.U
-      fu.io.roundingMode := 0.U
-      fu.io.subOp := 0.U
+      fu.io.detectTininess := _tininess_rule
+      fu.io.roundingMode := _rounding_rule
+      fu.io.subOp := false.B
       fu
     }
 
@@ -143,8 +143,6 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
             fu.io.subOp := true.B
             fu.io.a := _2
             fu.io.b := _3
-            fu.io.roundingMode := _rounding_rule
-            fu.io.detectTininess := _tininess_rule
             _1 := fu.io.out
           // TODO: handle exception flags!
         }
@@ -196,8 +194,6 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
             fu.io.subOp := true.B
             fu.io.a := _2
             fu.io.b := _3
-            fu.io.roundingMode := _rounding_rule
-            fu.io.detectTininess := _tininess_rule
             _1 := fu.io.out
           // TODO: handle exception flags!
         }
@@ -209,39 +205,38 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   })
 
   // stage 4 performs 24 muls for ray-box to find out the time intersection
-  // intervals, or 9 mul-adds for ray-triangle to perform shear and scale of
-  // triangle vertices. FMAD units are used for both.
+  // intervals, or 9 mul for ray-triangle to perform the multiplication step of shearing and scaling of
+  // triangle vertices. Mul units are used for both.
   stage_functions(4) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(true))
     emit := intake
 
-    val fu_list: List[MulAddRecFN] = List.fill(24) {
-      val fu = Module(new MulAddRecFN(8, 24))
+    val fu_list: List[MulRecFN] = List.fill(24) {
+      val fu = Module(new MulRecFN(8, 24))
       fu.io.a := 0.U
       fu.io.b := 0.U
-      fu.io.c := 0.U
-      fu.io.detectTininess := 0.U
-      fu.io.roundingMode := 0.U
-      fu.io.op := 0.U
+      fu.io.detectTininess := _tininess_rule
+      fu.io.roundingMode := _rounding_rule
       fu
     }
 
     switch(intake.opcode) {
       is(UnifiedDatapathOpCode.OpTriangle) {
+        // references to wires from the intake
         val kx = intake.ray.kx
         val ky = intake.ray.ky
         val kz = intake.ray.kz
 
         val _dest = Seq(
-          emit.A.x,
-          emit.A.y,
-          emit.A.z,
-          emit.B.x,
-          emit.B.y,
-          emit.B.z,
-          emit.C.x,
-          emit.C.y,
-          emit.C.z
+          emit.A.x, // (-ray.shear.x) * A.at(kz)
+          emit.A.y, // (-ray.shear.y) * A.at(kz)
+          emit.A.z, // ray.shear.z * A.at(kz)
+          emit.B.x, // (-ray.shear.x) * B.at(kz)
+          emit.B.y, // (-ray.shear.y) * B.at(kz)
+          emit.B.z, // ray.shear.z * B.at(kz)
+          emit.C.x, // (-ray.shear.x) * C.at(kz)
+          emit.C.y, // (-ray.shear.y) * C.at(kz)
+          emit.C.z // ray.shear.z * C.at(kz)
         )
 
         val _src1 = Seq(
@@ -268,30 +263,12 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           intake.triangle.C.at(kz)
         )
 
-        val _src3 = Seq(
-          intake.triangle.A.at(kx),
-          intake.triangle.A.at(ky),
-          _zero_RecFN,
-          intake.triangle.B.at(kx),
-          intake.triangle.B.at(ky),
-          _zero_RecFN,
-          intake.triangle.C.at(kx),
-          intake.triangle.C.at(ky),
-          _zero_RecFN
-        )
-
-        // _dest = _src1 * _src2 + _src3
-        (_dest zip _src1 zip _src2 zip _src3 zip fu_list).map {
-          case ((((_1, _2), _3), _4), fu) =>
-            // val fu = Module(new MulAddRecFN(8, 24))
-            fu.io.op := 0.U
-            fu.io.a := _2
-            fu.io.b := _3
-            fu.io.c := _4
-            fu.io.roundingMode := _rounding_rule
-            fu.io.detectTininess := _tininess_rule
-
-            _1 := fu.io.out
+        // _dest = _src1 * _src2
+        (_src1 zip _src2 zip _dest zip fu_list).map {
+          case (((_1, _2), _3), fu) =>
+            fu.io.a := _1
+            fu.io.b := _2
+            _3 := fu.io.out
           // handle exception flags!
         }
 
@@ -338,23 +315,12 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           )
         }
 
-        (_dest zip _src1 zip _src2 zip fu_list) foreach {
+        (_src1 zip _src2 zip _dest zip fu_list) foreach {
           case (((_1, _2), _3), fu) =>
-            // val fu = Module(new MulRecFN(8, 24))
-            // fu.io.a := _2
-            // fu.io.b := _3
-            // fu.io.roundingMode := _rounding_rule
-            // fu.io.detectTininess := _tininess_rule
-            // _1 := fu.io.out
-            // val fu = Module(new MulAddRecFN(8, 24))
-            fu.io.op := 0.U
-            fu.io.a := _2
-            fu.io.b := _3
-            fu.io.c := _zero_RecFN
-            fu.io.roundingMode := _rounding_rule
-            fu.io.detectTininess := _tininess_rule
+            fu.io.a := _1
+            fu.io.b := _2
 
-            _1 := fu.io.out
+            _3 := fu.io.out
           // TODO: handle exception flags!
         }
 
@@ -364,9 +330,81 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     emit
   })
 
-  // stage 5 performs 6 muls for ray-triangle test to figure out the minuends and
-  // subtrahends of U, V, W
+  // stage 5 performs 6 adds for ray-triangle to perform the addition step of
+  // shearing and scaling of triangle vertices.
   stage_functions(5) = Some({ intake =>
+    val emit = Wire(new ExtendedPipelineBundle(true))
+    emit := intake
+
+    val fu_list: List[AddRecFN] = List.fill(8) {
+      val fu = Module(new AddRecFN(8, 24))
+      fu.io.a := 0.U
+      fu.io.b := 0.U
+      fu.io.detectTininess := _tininess_rule
+      fu.io.roundingMode := _rounding_rule
+      fu.io.subOp := false.B
+      fu
+    }
+
+    switch(intake.opcode) {
+      is(UnifiedDatapathOpCode.OpTriangle) {
+        // the z-components don't need to add anything. In fact, the following
+        // 3 lines are redundant since we already let emit:=intake
+        emit.A.z := intake.A.z
+        emit.B.z := intake.B.z
+        emit.C.z := intake.C.z
+
+        // reference to intake wires
+        val kx = intake.ray.kx
+        val ky = intake.ray.ky
+        val kz = intake.ray.kz
+
+        val _dest = Seq(
+          emit.A.x, // A.at(kx) + (-ray.shear.x) * A.at(kz)
+          emit.A.y, // A.at(ky) + (-ray.shear.y) * A.at(kz)
+          emit.B.x, // B.at(kx) + (-ray.shear.x) * B.at(kz)
+          emit.B.y, // B.at(ky) + (-ray.shear.y) * B.at(kz)
+          emit.C.x, // C.at(kx) + (-ray.shear.x) * C.at(kz)
+          emit.C.y // C.at(ky) + (-ray.shear.y) * C.at(kz)
+        )
+
+        val _src1 = Seq(
+          intake.triangle.A.at(kx),
+          intake.triangle.A.at(ky),
+          intake.triangle.B.at(kx),
+          intake.triangle.B.at(ky),
+          intake.triangle.C.at(kx),
+          intake.triangle.C.at(ky)
+        )
+
+        val _src2 = Seq(
+          intake.A.x,
+          intake.A.y,
+          intake.B.x,
+          intake.B.y,
+          intake.C.x,
+          intake.C.y
+        )
+
+        (_src1 zip _src2 zip _dest zip fu_list).map {
+          case (((_1, _2), _3), fu) =>
+            fu.io.a := _1
+            fu.io.b := _2
+            _3 := fu.io.out
+            fu.io.subOp := false.B
+        }
+      }
+      is(UnifiedDatapathOpCode.OpQuadbox) {
+        // nothing
+      }
+    }
+
+    emit
+  })
+
+  // stage 6 performs 6 muls for ray-triangle test to figure out the minuends and
+  // subtrahends of U, V, W
+  stage_functions(6) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(true))
     emit := intake
     switch(intake.opcode) {
@@ -415,8 +453,8 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     emit
   })
 
-  // stage 6 performs 3 adds for ray-triangle test to find the value of U, V, W
-  stage_functions(6) = Some({ intake =>
+  // stage 7 performs 3 adds for ray-triangle test to find the value of U, V, W
+  stage_functions(7) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(true))
     emit := intake
     switch(intake.opcode) {
@@ -455,8 +493,8 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     emit
   })
 
-  // stage 7 calculates U*Az, V*Bz and W*Cz for ray-triangle test
-  stage_functions(7) = Some({ intake =>
+  // stage 8 calculates U*Az, V*Bz and W*Cz for ray-triangle test
+  stage_functions(8) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(true))
     emit := intake
     switch(intake.opcode) {
@@ -494,9 +532,9 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     emit
   })
 
-  // stage 8 does two adds for ray-triangle test to find out the partial sum for
+  // stage 9 does two adds for ray-triangle test to find out the partial sum for
   // t_denom and t_num
-  stage_functions(8) = Some({ intake =>
+  stage_functions(9) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(true))
     emit := intake
     switch(intake.opcode) {
@@ -526,9 +564,9 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     emit
   })
 
-  // stage 9 performs two adds for ray-triangle test, to complete the summation
+  // stage 10 performs two adds for ray-triangle test, to complete the summation
   // of t_denom and t_num
-  stage_functions(9) = Some({ intake =>
+  stage_functions(10) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(true))
     emit := intake
     switch(intake.opcode) {
@@ -558,10 +596,10 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     emit
   })
 
-  // stage 10 performs 12 CAS, 10 quad-sorts and 4 comparisons for ray-box
+  // stage 11 performs 12 CAS, 10 quad-sorts and 4 comparisons for ray-box
   // intersection to figure out intersecting boxes and sort them; or 5
   // comparisons for ray-triangle test to determine validity of intersection
-  stage_functions(10) = Some({ intake =>
+  stage_functions(11) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(true))
     emit := intake
     switch(intake.opcode) {
@@ -778,6 +816,6 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     )
   ).suggestName("stage_for_output")
 
-  output_stage.intake :<>= stage_modules(10).emit
+  output_stage.intake :<>= stage_modules(11).emit
   out :<>= output_stage.emit
 }

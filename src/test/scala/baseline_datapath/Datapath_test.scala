@@ -208,7 +208,8 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
           SW_Triangle(),
           SW_OpQuadbox,
           default_vec_a,
-          default_vec_b
+          default_vec_b,
+          true
         )
       }
     }
@@ -216,7 +217,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     // a sequence of software gold results
     val sw_result_seq: List[SW_RayBox_Result] = {
       ray_box_list.map {
-        case SW_EnhancedCombinedData(r, bseq, t, SW_OpQuadbox, _, _) => {
+        case SW_EnhancedCombinedData(r, bseq, t, SW_OpQuadbox, _, _, _) => {
           // println("calculated a sw result")
           RaytracerGold.testIntersection(r, bseq)
         }
@@ -279,7 +280,8 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
             ts,
             SW_OpTriangle,
             SW_Vector(),
-            SW_Vector()
+            SW_Vector(),
+            true
           )
         }
       }
@@ -287,7 +289,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       // a sequence of software gold results
       val sw_result_seq: List[SW_RayTriangle_Result] = {
         ray_triangle_list.map {
-          case SW_EnhancedCombinedData(r, _, t, SW_OpTriangle, _, _) => {
+          case SW_EnhancedCombinedData(r, _, t, SW_OpTriangle, _, _, _) => {
             // println("calculated a sw result")
             RaytracerGold.testTriangleIntersection(r, t)
           }
@@ -372,7 +374,8 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
               tri,
               op,
               SW_Vector(),
-              SW_Vector()
+              SW_Vector(),
+              true
             )
         }
       }
@@ -380,7 +383,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       // a sequence of software gold results
       val sw_result_seq: List[SW_Unified_Result] = {
         combined_data_list.map {
-          case SW_EnhancedCombinedData(r, _, t, SW_OpTriangle, _, _) => {
+          case SW_EnhancedCombinedData(r, _, t, SW_OpTriangle, _, _, _) => {
             // println("calculated a sw result")
             SW_Unified_Result(
               true,
@@ -388,7 +391,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
               SW_RayBox_Result()
             )
           }
-          case SW_EnhancedCombinedData(r, bs, _, SW_OpQuadbox, _, _) =>
+          case SW_EnhancedCombinedData(r, bs, _, SW_OpQuadbox, _, _, _) =>
             SW_Unified_Result(
               false,
               SW_RayTriangle_Result(),

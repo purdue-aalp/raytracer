@@ -95,7 +95,7 @@ class RayBoxPair(recorded_float: Boolean = false) extends Bundle {
   val aabb = new AABB(recorded_float)
 }
 
-class CombinedRayBoxTriangleBundle(recorded_float: Boolean = false)
+class CombinedRayBoxTriangleBundle(val recorded_float: Boolean = false)
     extends Bundle {
   val _bit_width = if (recorded_float) 33.W else 32.W
 
@@ -113,9 +113,12 @@ class CombinedRayBoxTriangleBundle(recorded_float: Boolean = false)
 /// each cycle.
 class EnhancedInputBundle(
     recorded_float: Boolean = false,
-    element_count: Int = 16
+    val element_count: Int = 16
 ) extends CombinedRayBoxTriangleBundle(recorded_float) {
 
+  // for euclidean distance calculation
+  val euclidean_mask = Bits(element_count.W)
+  val euclidean_reset_accum = Bool()
   val euclidean_a = Vec(element_count, Bits(_bit_width))
   val euclidean_b = Vec(element_count, Bits(_bit_width))
 }

@@ -183,14 +183,16 @@ object RaytracerTestHelper {
     val op = sw_data.opcode
     val vec_a = sw_data.vector_a
     val vec_b = sw_data.vector_b
+    val reset_accum = sw_data.reset_accum
     assert(sw_box.length == 4)
 
     val vec_a_as_bits = vec_a.get_elements().map(floatToBits(_))
     val vec_b_as_bits = vec_b.get_elements().map(floatToBits(_))
 
-    lazy val dummy_eib = new EnhancedInputBundle(false)
+    lazy val dummy_eib = new EnhancedInputBundle(false, 16)
     lazy val dummy_aabb = new AABB(false)
 
+    assert(dummy_eib.element_count <= 64)
     dummy_eib.Lit(
       _.opcode -> UnifiedDatapathOpCode(op.id.U),
       _.ray.origin.x -> floatToBits(sw_ray.origin.x),
@@ -255,7 +257,11 @@ object RaytracerTestHelper {
           _.z_max -> floatToBits(sw_box(3).z_max)
         ),
       _.euclidean_a -> Vec.Lit(vec_a_as_bits: _*),
-      _.euclidean_b -> Vec.Lit(vec_b_as_bits: _*)
+      _.euclidean_b -> Vec.Lit(vec_b_as_bits: _*),
+      _.euclidean_reset_accum -> reset_accum.B,
+
+      // assuming mask is always uniformly true
+      _.euclidean_mask -> (0xffff).U(dummy_eib.element_count.W)
     )
   }
 
