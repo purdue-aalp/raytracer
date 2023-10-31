@@ -11,6 +11,9 @@ case class RaytracerParams(
     // 32-bit IEEE-754 compliant float if false, 33-bit recorded format if true
     io_recorded_float: Boolean = false,
 
+    // format of FP numbers passed around between staged
+    internal_recorded_float: Boolean = true,
+
     // No euclidean support if None, else supports processing X dimensions per cycle given Some(X)
     support_euclidean: Option[Int] = None
 )
@@ -32,15 +35,13 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   // input is guaranteed to be registered by this module
   val in = IO(
     Flipped(
-      Decoupled(
-        new EnhancedInputBundle(recorded_float = false, element_count = 16)
-      )
+      Decoupled(new EnhancedInputBundle(p))
     )
   )
 
   // output is also registered by the last stage's output buffer
   val out = IO(
-    Decoupled(new UnifiedDatapathOutput(recorded_float = false))
+    Decoupled(new EnhancedOutputBundle(p))
   )
 
   // A cycle counter, that we can use when debugging the module
@@ -83,7 +84,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   // stage 3 performs 24 adds for ray-box, or 9 adds for ray-triangle, to
   // translate the geometries to the origin of the ray
   stage_functions(3) = Some({ intake =>
-    val emit = Wire(new ExtendedPipelineBundle(true))
+    val emit = Wire(new ExtendedPipelineBundle(p))
 
     // By default, copy the input. Code below overwrites fields of the bundle.
     emit := intake
@@ -208,7 +209,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   // intervals, or 9 mul for ray-triangle to perform the multiplication step of shearing and scaling of
   // triangle vertices. Mul units are used for both.
   stage_functions(4) = Some({ intake =>
-    val emit = Wire(new ExtendedPipelineBundle(true))
+    val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
     val fu_list: List[MulRecFN] = List.fill(24) {
@@ -333,7 +334,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   // stage 5 performs 6 adds for ray-triangle to perform the addition step of
   // shearing and scaling of triangle vertices.
   stage_functions(5) = Some({ intake =>
-    val emit = Wire(new ExtendedPipelineBundle(true))
+    val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
     val fu_list: List[AddRecFN] = List.fill(8) {
@@ -405,7 +406,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   // stage 6 performs 6 muls for ray-triangle test to figure out the minuends and
   // subtrahends of U, V, W
   stage_functions(6) = Some({ intake =>
-    val emit = Wire(new ExtendedPipelineBundle(true))
+    val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
     switch(intake.opcode) {
       is(UnifiedDatapathOpCode.OpTriangle) {
@@ -455,7 +456,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
 
   // stage 7 performs 3 adds for ray-triangle test to find the value of U, V, W
   stage_functions(7) = Some({ intake =>
-    val emit = Wire(new ExtendedPipelineBundle(true))
+    val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
     switch(intake.opcode) {
       is(UnifiedDatapathOpCode.OpTriangle) {
@@ -495,7 +496,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
 
   // stage 8 calculates U*Az, V*Bz and W*Cz for ray-triangle test
   stage_functions(8) = Some({ intake =>
-    val emit = Wire(new ExtendedPipelineBundle(true))
+    val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
     switch(intake.opcode) {
       is(UnifiedDatapathOpCode.OpTriangle) {
@@ -535,7 +536,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   // stage 9 does two adds for ray-triangle test to find out the partial sum for
   // t_denom and t_num
   stage_functions(9) = Some({ intake =>
-    val emit = Wire(new ExtendedPipelineBundle(true))
+    val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
     switch(intake.opcode) {
       is(UnifiedDatapathOpCode.OpTriangle) {
@@ -567,7 +568,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   // stage 10 performs two adds for ray-triangle test, to complete the summation
   // of t_denom and t_num
   stage_functions(10) = Some({ intake =>
-    val emit = Wire(new ExtendedPipelineBundle(true))
+    val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
     switch(intake.opcode) {
       is(UnifiedDatapathOpCode.OpTriangle) {
@@ -600,14 +601,13 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   // intersection to figure out intersecting boxes and sort them; or 5
   // comparisons for ray-triangle test to determine validity of intersection
   stage_functions(11) = Some({ intake =>
-    val emit = Wire(new ExtendedPipelineBundle(true))
+    val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
-
-    val comparator_fu_list = Seq.fill(5){
+    val comparator_fu_list = Seq.fill(5) {
       val fu = Module(new CompareRecFN(8, 24))
-      fu.io.a := 0.U 
-      fu.io.b := 0.U 
+      fu.io.a := 0.U
+      fu.io.b := 0.U
       fu.io.signaling := true.B
       fu
     }
@@ -764,8 +764,8 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   ] = stage_functions.toSeq.zipWithIndex.map { case (optF, idx) =>
     val stage = optF match {
       case Some(f) =>
-        Module(SkidBufferStage(new ExtendedPipelineBundle(true), f))
-      case None => Module(SkidBufferStage(new ExtendedPipelineBundle(true)))
+        Module(SkidBufferStage(new ExtendedPipelineBundle(p), f))
+      case None => Module(SkidBufferStage(new ExtendedPipelineBundle(p)))
     }
     stage.suggestName(s"stage_${idx}")
     stage
@@ -776,7 +776,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   // the connections by routing the module input to stage_2_actual, and route
   // stage_2_actual to stage 3
   val _last_stage_emit_port = stage_modules.foldLeft(
-    WireDefault(0.U.asTypeOf(Decoupled(new ExtendedPipelineBundle(true))))
+    WireDefault(0.U.asTypeOf(Decoupled(new ExtendedPipelineBundle(p))))
   ) { case (w, s) =>
     s.intake :<>= w
     s.emit
@@ -788,16 +788,21 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   // stage 2 converts FN to RecFN, so we need a more generic SkidBufferStage
   val stage_2_actual_module = Module(
     GenerializedSkidBufferStage(
-      // new CombinedRayBoxTriangleBundle(false),
-      new EnhancedInputBundle(false, 16),
-      new ExtendedPipelineBundle(true),
+      new EnhancedInputBundle(p),
+      new ExtendedPipelineBundle(p),
       { (input: EnhancedInputBundle) =>
-        val output = WireDefault(0.U.asTypeOf(new ExtendedPipelineBundle(true)))
+        val output = WireDefault(0.U.asTypeOf(new ExtendedPipelineBundle(p)))
         output.opcode := input.opcode
         output.ray := RayConvertFNtoRecFN(input.ray)
         output.triangle := TriangleConvertFNtoRecFN(input.triangle)
         (output.aabb zip input.aabb).map { case (reg_o, reg_i) =>
           reg_o := AABBConvertFNtoRecFN(reg_i)
+        }
+        if (p.support_euclidean.isDefined) {
+          output.vec_a := input.euclidean_a
+          output.vec_b := input.euclidean_b
+          output.vec_mask := input.euclidean_mask
+          output.vec_reset_accum := input.euclidean_reset_accum
         }
         output
       }
@@ -814,10 +819,10 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   // the output stage also contains special logic: to convert RecFN to FN
   val output_stage = Module(
     GenerializedSkidBufferStage(
-      new ExtendedPipelineBundle(true),
-      new UnifiedDatapathOutput(false),
+      new ExtendedPipelineBundle(p),
+      new EnhancedOutputBundle(p),
       { (input: ExtendedPipelineBundle) =>
-        val output = Wire(new UnifiedDatapathOutput(false))
+        val output = Wire(new EnhancedOutputBundle(p))
         output.opcode := input.opcode
         output.tmin_out := input.tmin.map(fNFromRecFN(8, 24, _))
         output.isIntersect := input.isIntersect
@@ -825,6 +830,10 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
         output.t_denom := fNFromRecFN(8, 24, input.t_denom)
         output.t_num := fNFromRecFN(8, 24, input.t_num)
         output.triangle_hit := input.triangle_hit
+        if (p.support_euclidean.isDefined) {
+          output.euclidean_accumulator := input.vec_accum_val
+          output.euclidean_reset_accum := input.vec_reset_accum
+        }
         output
       }
     )

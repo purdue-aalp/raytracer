@@ -148,6 +148,7 @@ case class SW_EnhancedCombinedData(
     val boxes: Seq[SW_Box],
     val triangle: SW_Triangle,
     val opcode: SW_Opcode,
+    val element_count: Option[Int],
     val vector_a: SW_Vector,
     val vector_b: SW_Vector,
     val reset_accum: Boolean
@@ -251,6 +252,20 @@ object RandomSWData {
       float_3(rands(0), rands(1), rands(2)),
       float_3(rands(3), rands(4), rands(5)),
       float_3(rands(6), rands(7), rands(8))
+    )
+  }
+
+  def genRandomVector(
+      lower_bound: Float,
+      upper_bound: Float,
+      element_count: Int
+  ): SW_Vector = {
+    import scala.util.Random
+    lazy val r = new Random()
+    SW_Vector(
+      Seq.fill(element_count)(
+        r.nextFloat() * (upper_bound - lower_bound) + lower_bound
+      )
     )
   }
 }

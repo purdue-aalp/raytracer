@@ -112,15 +112,16 @@ class CombinedRayBoxTriangleBundle(val recorded_float: Boolean = false)
 /// Element count is how many elements to calculate euclidean distance for, in
 /// each cycle.
 class EnhancedInputBundle(
-    recorded_float: Boolean = false,
-    val element_count: Int = 16
-) extends CombinedRayBoxTriangleBundle(recorded_float) {
+    private val p: RaytracerParams
+) extends CombinedRayBoxTriangleBundle(p.io_recorded_float) {
+  val _element_count = p.support_euclidean.getOrElse(0)
 
   // for euclidean distance calculation
-  val euclidean_mask = Bits(element_count.W)
-  val euclidean_reset_accum = Bool()
-  val euclidean_a = Vec(element_count, Bits(_bit_width))
-  val euclidean_b = Vec(element_count, Bits(_bit_width))
+  val euclidean_mask =
+    Vec(if (_element_count > 0) 1 else 0, Bits(_element_count.W))
+  val euclidean_reset_accum = Vec(if (_element_count > 0) 1 else 0, Bool())
+  val euclidean_a = Vec(_element_count, Bits(_bit_width))
+  val euclidean_b = Vec(_element_count, Bits(_bit_width))
 }
 
 class UnifiedDatapathOutput(recorded_float: Boolean = false) extends Bundle {
@@ -146,18 +147,26 @@ class UnifiedDatapathOutput(recorded_float: Boolean = false) extends Bundle {
   val triangle_hit = Bool()
 }
 
+class EnhancedOutputBundle(
+    private val p: RaytracerParams
+) extends UnifiedDatapathOutput(p.io_recorded_float) {
+  val _element_count = p.support_euclidean.getOrElse(0)
+
+  // euclidean
+  val euclidean_accumulator =
+    Vec(if (_element_count > 0) 1 else 0, Bits(_bit_width))
+  val euclidean_reset_accum = Vec(if (_element_count > 0) 1 else 0, Bool())
+}
+
 // Nothing more than this bundle needs to be passed between pipeline stages of
 // the Unified raytracer datapath. Obviously, not all fields will be used in
 // every stage. I entrust the several levels of compilers (FIRRTL, Verilator,
 // proprietary RTL synthesizer) to remove unused signals automatically.
-class ExtendedPipelineBundle(recorded_float: Boolean)
-    extends CombinedRayBoxTriangleBundle(recorded_float) {
+class ExtendedPipelineBundle(private val p: RaytracerParams)
+    extends CombinedRayBoxTriangleBundle(p.internal_recorded_float) {
 
   // common and basic: defined in base trait CombinedRayBoxTriangleBundle
-  // val ray = new Ray(recorded_float)
-  // val aabb = Vec(4, new AABB(recorded_float))
-  // val triangle = new Triangle(recorded_float)
-  // val isTriangleOp = Bool()
+  // val ray, aabb, triangle, opcode
 
   // for ray-box intersection tests
   val t_min = Vec(4, new Float3(recorded_float))
@@ -183,6 +192,18 @@ class ExtendedPipelineBundle(recorded_float: Boolean)
   val t_denom = Bits(_bit_width)
   val t_num = Bits(_bit_width)
   val triangle_hit = Bool()
+
+  // For euclidean distance calculation
+  // When element_count is 0, this means the elaborated module does not include
+  // hardware for euclidean distance calculation. A Vec of width 0 elaborates
+  // into nothing.
+  val _element_count = p.support_euclidean.getOrElse(0)
+  val _elaborate_euclidean = (_element_count > 0)
+  val vec_a = Vec(_element_count, Bits(_bit_width))
+  val vec_b = Vec(_element_count, Bits(_bit_width))
+  val vec_mask = Vec(if (_elaborate_euclidean) 1 else 0, Bits(_element_count.W))
+  val vec_reset_accum = Vec(if (_elaborate_euclidean) 1 else 0, Bool())
+  val vec_accum_val = Vec(if (_elaborate_euclidean) 1 else 0, Bits(_bit_width))
 }
 
 // Conversion circuits between 32-bit IEEE float and 33-bit recorded float

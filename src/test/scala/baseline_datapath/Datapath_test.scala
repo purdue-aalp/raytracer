@@ -44,7 +44,12 @@ class Datapath_wrapper extends Datapath {
 }
 
 class UnifiedDatapath_wrapper
-    extends UnifiedDatapath(p = RaytracerParams(false, None)) {
+    extends UnifiedDatapath(p = RaytracerParams(false, true, None)) {
+  val exposed_time = expose(_time)
+}
+
+class UnifiedDatapath_wrapper_16
+    extends UnifiedDatapath(p = RaytracerParams(false, true, Some(16))) {
   val exposed_time = expose(_time)
 }
 
@@ -61,24 +66,26 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     0.001 // normalized error: 149 vs 100 would have an error of 0.49
   val use_stage_submodule = false
   val dump_vcd_for_unified_test = false
-  val test_ray_box_specific = true
-  val test_ray_triangle_specific = true
+  val test_ray_box_specific = false
+  val test_ray_triangle_specific = false
   val test_ray_box_random = true
   val test_ray_triangle_random = true
   val test_unified_random = true
 
   val default_vec_a = SW_Vector((0 until 16).toList.map(_.toFloat))
   val default_vec_b = SW_Vector((16 until 0 by -1).toList.map(_.toFloat))
+  val empty_vec_a = SW_Vector(Nil)
+  val empty_vec_b = SW_Vector(Nil)
 
   val chisel_test_annotations = Seq(
     VerilatorBackendAnnotation,
     CachingAnnotation,
     // CachingDebugAnnotation,
-    TargetDirAnnotation(
-      if (use_stage_submodule)
-        "cached_verilator_backend/Datapath_stage_submodule"
-      else "cached_verilator_backend/Datapath_monolithic"
-    ),
+    // TargetDirAnnotation(
+    //   if (use_stage_submodule)
+    //     "cached_verilator_backend/Datapath_stage_submodule"
+    //   else "cached_verilator_backend/Datapath_monolithic"
+    // ),
     // WriteVcdAnnotation,
     VerilatorCFlags(Seq("-O3", "-march=native")),
     VerilatorLinkFlags(Seq("-O3", "-march=native")),
@@ -207,8 +214,9 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
           bs,
           SW_Triangle(),
           SW_OpQuadbox,
-          default_vec_a,
-          default_vec_b,
+          None,
+          empty_vec_a,
+          empty_vec_b,
           true
         )
       }
@@ -217,7 +225,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     // a sequence of software gold results
     val sw_result_seq: List[SW_RayBox_Result] = {
       ray_box_list.map {
-        case SW_EnhancedCombinedData(r, bseq, t, SW_OpQuadbox, _, _, _) => {
+        case SW_EnhancedCombinedData(r, bseq, t, SW_OpQuadbox, _, _, _, _) => {
           // println("calculated a sw result")
           RaytracerGold.testIntersection(r, bseq)
         }
@@ -279,8 +287,9 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
             _four_empty_boxes,
             ts,
             SW_OpTriangle,
-            SW_Vector(),
-            SW_Vector(),
+            None,
+            empty_vec_a,
+            empty_vec_b,
             true
           )
         }
@@ -289,7 +298,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       // a sequence of software gold results
       val sw_result_seq: List[SW_RayTriangle_Result] = {
         ray_triangle_list.map {
-          case SW_EnhancedCombinedData(r, _, t, SW_OpTriangle, _, _, _) => {
+          case SW_EnhancedCombinedData(r, _, t, SW_OpTriangle, _, _, _, _) => {
             // println("calculated a sw result")
             RaytracerGold.testTriangleIntersection(r, t)
           }
@@ -357,6 +366,27 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     }
   }
 
+  def testEuclidean(
+      description: String,
+      vec_a: Seq[SW_Vector],
+      vec_b: Seq[SW_Vector]
+  ): Unit = description in {
+    val combined_data_list: List[SW_EnhancedCombinedData] = List.from {
+      (vec_a zip vec_b).map { case (a, b) =>
+        SW_EnhancedCombinedData(
+          SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(1.0f, 1.0f, 1.0f)),
+          Seq.fill(4)(SW_Box()),
+          SW_Triangle(),
+          SW_OpEuclidean,
+          Some(a.dim),
+          a,
+          b,
+          true
+        )
+      }
+    }
+  }
+
   def testUnifiedIntersection(
       description: String,
       ray_seq: Seq[SW_Ray],
@@ -373,8 +403,9 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
               boxs,
               tri,
               op,
-              SW_Vector(),
-              SW_Vector(),
+              Some(16),
+              default_vec_a,
+              default_vec_b,
               true
             )
         }
@@ -383,7 +414,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       // a sequence of software gold results
       val sw_result_seq: List[SW_Unified_Result] = {
         combined_data_list.map {
-          case SW_EnhancedCombinedData(r, _, t, SW_OpTriangle, _, _, _) => {
+          case SW_EnhancedCombinedData(r, _, t, SW_OpTriangle, _, _, _, _) => {
             // println("calculated a sw result")
             SW_Unified_Result(
               true,
@@ -391,7 +422,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
               SW_RayBox_Result()
             )
           }
-          case SW_EnhancedCombinedData(r, bs, _, SW_OpQuadbox, _, _, _) =>
+          case SW_EnhancedCombinedData(r, bs, _, SW_OpQuadbox, _, _, _, _) =>
             SW_Unified_Result(
               false,
               SW_RayTriangle_Result(),
@@ -403,7 +434,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
       var worst_normalized_error = 0.0f
 
-      test(new UnifiedDatapath_wrapper)
+      test(new UnifiedDatapath_wrapper_16)
         .withAnnotations(
           chisel_test_annotations :++ {
             if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }

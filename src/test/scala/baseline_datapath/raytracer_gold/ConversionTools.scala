@@ -181,88 +181,166 @@ object RaytracerTestHelper {
     val sw_box = sw_data.boxes
     val sw_triangle = sw_data.triangle
     val op = sw_data.opcode
+
+    // if 0 means no euclidean is supported
+    val vec_elements = sw_data.element_count.getOrElse(0)
     val vec_a = sw_data.vector_a
     val vec_b = sw_data.vector_b
     val reset_accum = sw_data.reset_accum
     assert(sw_box.length == 4)
-
+    assert(vec_elements == vec_a.dim)
+    assert(vec_elements == vec_b.dim)
+    assert(vec_elements <= 64)
     val vec_a_as_bits = vec_a.get_elements().map(floatToBits(_))
     val vec_b_as_bits = vec_b.get_elements().map(floatToBits(_))
 
-    lazy val dummy_eib = new EnhancedInputBundle(false, 16)
     lazy val dummy_aabb = new AABB(false)
 
-    assert(dummy_eib.element_count <= 64)
-    dummy_eib.Lit(
-      _.opcode -> UnifiedDatapathOpCode(op.id.U),
-      _.ray.origin.x -> floatToBits(sw_ray.origin.x),
-      _.ray.origin.y -> floatToBits(sw_ray.origin.y),
-      _.ray.origin.z -> floatToBits(sw_ray.origin.z),
-      _.ray.dir.x -> floatToBits(sw_ray.dir.x),
-      _.ray.dir.y -> floatToBits(sw_ray.dir.y),
-      _.ray.dir.z -> floatToBits(sw_ray.dir.z),
-      _.ray.inv.x -> floatToBits(sw_ray.inv.x),
-      _.ray.inv.y -> floatToBits(sw_ray.inv.y),
-      _.ray.inv.z -> floatToBits(sw_ray.inv.z),
-      _.ray.extent -> floatToBits(sw_ray.extent),
-      _.ray.kx -> sw_ray.kx.U,
-      _.ray.ky -> sw_ray.ky.U,
-      _.ray.kz -> sw_ray.kz.U,
-      _.ray.shear.x -> floatToBits(sw_ray.shear.x),
-      _.ray.shear.y -> floatToBits(sw_ray.shear.y),
-      _.ray.shear.z -> floatToBits(sw_ray.shear.z),
-      _.triangle.A.x -> floatToBits(sw_triangle.A.x),
-      _.triangle.A.y -> floatToBits(sw_triangle.A.y),
-      _.triangle.A.z -> floatToBits(sw_triangle.A.z),
-      _.triangle.B.x -> floatToBits(sw_triangle.B.x),
-      _.triangle.B.y -> floatToBits(sw_triangle.B.y),
-      _.triangle.B.z -> floatToBits(sw_triangle.B.z),
-      _.triangle.C.x -> floatToBits(sw_triangle.C.x),
-      _.triangle.C.y -> floatToBits(sw_triangle.C.y),
-      _.triangle.C.z -> floatToBits(sw_triangle.C.z),
-      _.aabb(0) ->
-        dummy_aabb.Lit(
-          _.x_min -> floatToBits(sw_box(0).x_min),
-          _.x_max -> floatToBits(sw_box(0).x_max),
-          _.y_min -> floatToBits(sw_box(0).y_min),
-          _.y_max -> floatToBits(sw_box(0).y_max),
-          _.z_min -> floatToBits(sw_box(0).z_min),
-          _.z_max -> floatToBits(sw_box(0).z_max)
-        ),
-      _.aabb(1) ->
-        dummy_aabb.Lit(
-          _.x_min -> floatToBits(sw_box(1).x_min),
-          _.x_max -> floatToBits(sw_box(1).x_max),
-          _.y_min -> floatToBits(sw_box(1).y_min),
-          _.y_max -> floatToBits(sw_box(1).y_max),
-          _.z_min -> floatToBits(sw_box(1).z_min),
-          _.z_max -> floatToBits(sw_box(1).z_max)
-        ),
-      _.aabb(2) ->
-        dummy_aabb.Lit(
-          _.x_min -> floatToBits(sw_box(2).x_min),
-          _.x_max -> floatToBits(sw_box(2).x_max),
-          _.y_min -> floatToBits(sw_box(2).y_min),
-          _.y_max -> floatToBits(sw_box(2).y_max),
-          _.z_min -> floatToBits(sw_box(2).z_min),
-          _.z_max -> floatToBits(sw_box(2).z_max)
-        ),
-      _.aabb(3) ->
-        dummy_aabb.Lit(
-          _.x_min -> floatToBits(sw_box(3).x_min),
-          _.x_max -> floatToBits(sw_box(3).x_max),
-          _.y_min -> floatToBits(sw_box(3).y_min),
-          _.y_max -> floatToBits(sw_box(3).y_max),
-          _.z_min -> floatToBits(sw_box(3).z_min),
-          _.z_max -> floatToBits(sw_box(3).z_max)
-        ),
-      _.euclidean_a -> Vec.Lit(vec_a_as_bits: _*),
-      _.euclidean_b -> Vec.Lit(vec_b_as_bits: _*),
-      _.euclidean_reset_accum -> reset_accum.B,
+    vec_elements match {
+      case 0 =>
+        val dummy_eib = new EnhancedInputBundle(
+          RaytracerParams(false, true, sw_data.element_count)
+        )
+        dummy_eib.Lit(
+          _.opcode -> UnifiedDatapathOpCode(op.id.U),
+          _.ray.origin.x -> floatToBits(sw_ray.origin.x),
+          _.ray.origin.y -> floatToBits(sw_ray.origin.y),
+          _.ray.origin.z -> floatToBits(sw_ray.origin.z),
+          _.ray.dir.x -> floatToBits(sw_ray.dir.x),
+          _.ray.dir.y -> floatToBits(sw_ray.dir.y),
+          _.ray.dir.z -> floatToBits(sw_ray.dir.z),
+          _.ray.inv.x -> floatToBits(sw_ray.inv.x),
+          _.ray.inv.y -> floatToBits(sw_ray.inv.y),
+          _.ray.inv.z -> floatToBits(sw_ray.inv.z),
+          _.ray.extent -> floatToBits(sw_ray.extent),
+          _.ray.kx -> sw_ray.kx.U,
+          _.ray.ky -> sw_ray.ky.U,
+          _.ray.kz -> sw_ray.kz.U,
+          _.ray.shear.x -> floatToBits(sw_ray.shear.x),
+          _.ray.shear.y -> floatToBits(sw_ray.shear.y),
+          _.ray.shear.z -> floatToBits(sw_ray.shear.z),
+          _.triangle.A.x -> floatToBits(sw_triangle.A.x),
+          _.triangle.A.y -> floatToBits(sw_triangle.A.y),
+          _.triangle.A.z -> floatToBits(sw_triangle.A.z),
+          _.triangle.B.x -> floatToBits(sw_triangle.B.x),
+          _.triangle.B.y -> floatToBits(sw_triangle.B.y),
+          _.triangle.B.z -> floatToBits(sw_triangle.B.z),
+          _.triangle.C.x -> floatToBits(sw_triangle.C.x),
+          _.triangle.C.y -> floatToBits(sw_triangle.C.y),
+          _.triangle.C.z -> floatToBits(sw_triangle.C.z),
+          _.aabb(0) ->
+            dummy_aabb.Lit(
+              _.x_min -> floatToBits(sw_box(0).x_min),
+              _.x_max -> floatToBits(sw_box(0).x_max),
+              _.y_min -> floatToBits(sw_box(0).y_min),
+              _.y_max -> floatToBits(sw_box(0).y_max),
+              _.z_min -> floatToBits(sw_box(0).z_min),
+              _.z_max -> floatToBits(sw_box(0).z_max)
+            ),
+          _.aabb(1) ->
+            dummy_aabb.Lit(
+              _.x_min -> floatToBits(sw_box(1).x_min),
+              _.x_max -> floatToBits(sw_box(1).x_max),
+              _.y_min -> floatToBits(sw_box(1).y_min),
+              _.y_max -> floatToBits(sw_box(1).y_max),
+              _.z_min -> floatToBits(sw_box(1).z_min),
+              _.z_max -> floatToBits(sw_box(1).z_max)
+            ),
+          _.aabb(2) ->
+            dummy_aabb.Lit(
+              _.x_min -> floatToBits(sw_box(2).x_min),
+              _.x_max -> floatToBits(sw_box(2).x_max),
+              _.y_min -> floatToBits(sw_box(2).y_min),
+              _.y_max -> floatToBits(sw_box(2).y_max),
+              _.z_min -> floatToBits(sw_box(2).z_min),
+              _.z_max -> floatToBits(sw_box(2).z_max)
+            ),
+          _.aabb(3) ->
+            dummy_aabb.Lit(
+              _.x_min -> floatToBits(sw_box(3).x_min),
+              _.x_max -> floatToBits(sw_box(3).x_max),
+              _.y_min -> floatToBits(sw_box(3).y_min),
+              _.y_max -> floatToBits(sw_box(3).y_max),
+              _.z_min -> floatToBits(sw_box(3).z_min),
+              _.z_max -> floatToBits(sw_box(3).z_max)
+            )
+        )
+      case _ =>
+        val dummy_eib = new EnhancedInputBundle(
+          RaytracerParams(false, true, sw_data.element_count)
+        )
+        dummy_eib.Lit(
+          _.opcode -> UnifiedDatapathOpCode(op.id.U),
+          _.ray.origin.x -> floatToBits(sw_ray.origin.x),
+          _.ray.origin.y -> floatToBits(sw_ray.origin.y),
+          _.ray.origin.z -> floatToBits(sw_ray.origin.z),
+          _.ray.dir.x -> floatToBits(sw_ray.dir.x),
+          _.ray.dir.y -> floatToBits(sw_ray.dir.y),
+          _.ray.dir.z -> floatToBits(sw_ray.dir.z),
+          _.ray.inv.x -> floatToBits(sw_ray.inv.x),
+          _.ray.inv.y -> floatToBits(sw_ray.inv.y),
+          _.ray.inv.z -> floatToBits(sw_ray.inv.z),
+          _.ray.extent -> floatToBits(sw_ray.extent),
+          _.ray.kx -> sw_ray.kx.U,
+          _.ray.ky -> sw_ray.ky.U,
+          _.ray.kz -> sw_ray.kz.U,
+          _.ray.shear.x -> floatToBits(sw_ray.shear.x),
+          _.ray.shear.y -> floatToBits(sw_ray.shear.y),
+          _.ray.shear.z -> floatToBits(sw_ray.shear.z),
+          _.triangle.A.x -> floatToBits(sw_triangle.A.x),
+          _.triangle.A.y -> floatToBits(sw_triangle.A.y),
+          _.triangle.A.z -> floatToBits(sw_triangle.A.z),
+          _.triangle.B.x -> floatToBits(sw_triangle.B.x),
+          _.triangle.B.y -> floatToBits(sw_triangle.B.y),
+          _.triangle.B.z -> floatToBits(sw_triangle.B.z),
+          _.triangle.C.x -> floatToBits(sw_triangle.C.x),
+          _.triangle.C.y -> floatToBits(sw_triangle.C.y),
+          _.triangle.C.z -> floatToBits(sw_triangle.C.z),
+          _.aabb(0) ->
+            dummy_aabb.Lit(
+              _.x_min -> floatToBits(sw_box(0).x_min),
+              _.x_max -> floatToBits(sw_box(0).x_max),
+              _.y_min -> floatToBits(sw_box(0).y_min),
+              _.y_max -> floatToBits(sw_box(0).y_max),
+              _.z_min -> floatToBits(sw_box(0).z_min),
+              _.z_max -> floatToBits(sw_box(0).z_max)
+            ),
+          _.aabb(1) ->
+            dummy_aabb.Lit(
+              _.x_min -> floatToBits(sw_box(1).x_min),
+              _.x_max -> floatToBits(sw_box(1).x_max),
+              _.y_min -> floatToBits(sw_box(1).y_min),
+              _.y_max -> floatToBits(sw_box(1).y_max),
+              _.z_min -> floatToBits(sw_box(1).z_min),
+              _.z_max -> floatToBits(sw_box(1).z_max)
+            ),
+          _.aabb(2) ->
+            dummy_aabb.Lit(
+              _.x_min -> floatToBits(sw_box(2).x_min),
+              _.x_max -> floatToBits(sw_box(2).x_max),
+              _.y_min -> floatToBits(sw_box(2).y_min),
+              _.y_max -> floatToBits(sw_box(2).y_max),
+              _.z_min -> floatToBits(sw_box(2).z_min),
+              _.z_max -> floatToBits(sw_box(2).z_max)
+            ),
+          _.aabb(3) ->
+            dummy_aabb.Lit(
+              _.x_min -> floatToBits(sw_box(3).x_min),
+              _.x_max -> floatToBits(sw_box(3).x_max),
+              _.y_min -> floatToBits(sw_box(3).y_min),
+              _.y_max -> floatToBits(sw_box(3).y_max),
+              _.z_min -> floatToBits(sw_box(3).z_min),
+              _.z_max -> floatToBits(sw_box(3).z_max)
+            ),
+          _.euclidean_a -> Vec.Lit(vec_a_as_bits: _*),
+          _.euclidean_b -> Vec.Lit(vec_b_as_bits: _*),
+          _.euclidean_reset_accum -> Vec.Lit(reset_accum.B),
 
-      // assuming mask is always uniformly true
-      _.euclidean_mask -> (0xffff).U(dummy_eib.element_count.W)
-    )
+          // assuming mask is always uniformly true
+          _.euclidean_mask -> Vec.Lit((0xffff).U(16.W))
+        )
+    }
+
   }
 
   implicit def fromSWEnhancedCombinedDataSeqToEnhancedInputBundleSeq(
