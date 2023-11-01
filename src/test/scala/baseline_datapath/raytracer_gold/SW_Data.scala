@@ -182,36 +182,41 @@ case class SW_Unified_Result(
     val box_result: SW_RayBox_Result
 )
 
-object get_euclidean_job_seq_from_vec_pair{
-  def apply(vec_a: SW_Vector, vec_b: SW_Vector): Seq[SW_EnhancedCombinedData] = {
+object get_euclidean_job_seq_from_vec_pair {
+  def apply(
+      vec_a: SW_Vector,
+      vec_b: SW_Vector
+  ): Seq[SW_EnhancedCombinedData] = {
     assert(vec_b.dim == vec_a.dim)
     assert(vec_a.dim % 16 == 0)
 
-    val beats: Int = vec_a.dim / 16 
+    val beats: Int = vec_a.dim / 16
 
-    def job_seq(vec_pair: (Seq[Float], Seq[Float])): Seq[SW_EnhancedCombinedData] = vec_pair match {
+    def job_seq(
+        vec_pair: (Seq[Float], Seq[Float])
+    ): Seq[SW_EnhancedCombinedData] = vec_pair match {
       case (Nil, Nil) => Nil
       case _ =>
-      val (vec_a_first_sixteen, vec_a_remaining) = vec_pair._1.splitAt(16)
-      val (vec_b_first_sixteen, vec_b_remaining) = vec_pair._2.splitAt(16)
-      val last_beat = if(vec_pair._1.length==16) true else false
+        val (vec_a_first_sixteen, vec_a_remaining) = vec_pair._1.splitAt(16)
+        val (vec_b_first_sixteen, vec_b_remaining) = vec_pair._2.splitAt(16)
+        val last_beat = if (vec_pair._1.length == 16) true else false
 
-      val one_job = SW_EnhancedCombinedData(
-        SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(1.0f, 1.0f, 1.0f)),
-        Seq.fill(4)(SW_Box()),
-        SW_Triangle(),
-        SW_OpEuclidean,
-        Some(16),
-        SW_Vector(vec_a_first_sixteen),
-        SW_Vector(vec_b_first_sixteen),
-        last_beat
-      )
-      one_job +: job_seq((vec_a_remaining, vec_b_remaining))
+        val one_job = SW_EnhancedCombinedData(
+          SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(1.0f, 1.0f, 1.0f)),
+          Seq.fill(4)(SW_Box()),
+          SW_Triangle(),
+          SW_OpEuclidean,
+          Some(16),
+          SW_Vector(vec_a_first_sixteen),
+          SW_Vector(vec_b_first_sixteen),
+          last_beat
+        )
+        one_job +: job_seq((vec_a_remaining, vec_b_remaining))
     }
 
     job_seq((vec_a.get_elements(), vec_b.get_elements()))
 
-  } 
+  }
 }
 
 object RandomSWData {
@@ -300,14 +305,30 @@ object RandomSWData {
   def genRandomVector(
       lower_bound: Float,
       upper_bound: Float,
-      element_count: Int
+      beat: Int
   ): SW_Vector = {
     import scala.util.Random
     lazy val r = new Random()
+
     SW_Vector(
-      Seq.fill(element_count)(
+      Seq.fill(beat * 16)(
         r.nextFloat() * (upper_bound - lower_bound) + lower_bound
       )
+    )
+  }
+
+  def genRandomVectorPair(
+      lower_bound: Float,
+      upper_bound: Float,
+      largest_beat: Int
+  ): (SW_Vector, SW_Vector) = {
+    import scala.util.Random
+    lazy val r = new Random()
+
+    val _beat = r.nextInt(largest_beat) + 1
+    (
+      genRandomVector(lower_bound, upper_bound, _beat),
+      genRandomVector(lower_bound, upper_bound, _beat)
     )
   }
 }

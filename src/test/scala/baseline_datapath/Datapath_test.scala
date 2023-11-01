@@ -61,18 +61,19 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   type HW_Box = baseline_datapath.AABB
 
   val r = new Random()
-  val N_RANDOM_TEST = 10
+  val N_RANDOM_TEST = 1000
   val PRINT_END_TIME = true
   val float_tolerance_error =
     0.001 // normalized error: 149 vs 100 would have an error of 0.49
   val use_stage_submodule = false
   val dump_vcd_for_unified_test = false
-  val test_ray_box_specific = false
-  val test_ray_triangle_specific = false
-  val test_ray_box_random = false
-  val test_ray_triangle_random = false
+
+  val test_ray_box_specific = true
+  val test_ray_triangle_specific = true
+  val test_ray_box_random = true
+  val test_ray_triangle_random = true
   val test_euclidean_random = true
-  val test_unified_random = false
+  val test_unified_random = true
 
   val default_vec_a = SW_Vector((0 until 16).toList.map(_.toFloat))
   val default_vec_b = SW_Vector((16 until 0 by -1).toList.map(_.toFloat))
@@ -385,7 +386,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     val result_list = (seq_vec_a zip seq_vec_b).map { case (va, vb) =>
       va.calc_diff(vb)
     }
-    
+
     var worst_normalized_diff = 0.0f
 
     test(new UnifiedDatapath_wrapper_16)
@@ -406,29 +407,28 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
           dut.in.enqueueSeq(combined_data_list)
         }.fork {
           dut.out.ready.poke(true.B)
-          result_list.zipWithIndex.foreach {
-            case (sw_sum, idx) =>
-              dut.out.waitForValid()
+          result_list.zipWithIndex.foreach { case (sw_sum, idx) =>
+            dut.out.waitForValid()
 
-              // only inspect the hw output on the last beat, i.e. those that
-              // asserts the reset_accum signal
-              while(!dut.out.bits.euclidean_reset_accum.peek()(0).litToBoolean){
-                dut.clock.step()
-                dut.out.waitForValid()
-              }
-
-              println(s"${idx}: sw_result: ${sw_sum}, hardware result: ${bitsToFloat(dut.out.bits.euclidean_accumulator(0).peek())}")
-              // assert(sw_sum ==
-              // bitsToFloat(dut.out.bits.euclidean_accumulator(0).peek()))
-              val normalized_diff = abs(
-                sw_sum - bitsToFloat(
-                  dut.out.bits.euclidean_accumulator(0).peek()
-                )
-              ) / sw_sum
-              if (normalized_diff > worst_normalized_diff)
-                worst_normalized_diff = normalized_diff
-             
+            // only inspect the hw output on the last beat, i.e. those that
+            // asserts the reset_accum signal
+            while (!dut.out.bits.euclidean_reset_accum.peek()(0).litToBoolean) {
               dut.clock.step()
+              dut.out.waitForValid()
+            }
+
+            // println(s"${idx}: sw_result: ${sw_sum}, hardware result: ${bitsToFloat(dut.out.bits.euclidean_accumulator(0).peek())}")
+            // assert(sw_sum ==
+            // bitsToFloat(dut.out.bits.euclidean_accumulator(0).peek()))
+            val normalized_diff = abs(
+              sw_sum - bitsToFloat(
+                dut.out.bits.euclidean_accumulator(0).peek()
+              )
+            ) / sw_sum
+            if (normalized_diff > worst_normalized_diff)
+              worst_normalized_diff = normalized_diff
+
+            dut.clock.step()
           }
         }.join()
 
@@ -761,11 +761,17 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     )
   }
 
+  val vec_pair_seq =
+    Seq.fill(N_RANDOM_TEST)(RandomSWData.genRandomVectorPair(-10.0f, 10.0f, 22))
+
+  val vec_a = vec_pair_seq.map { case (_1, _2) => _1 }
+  val vec_b = vec_pair_seq.map { case (_1, _2) => _2 }
+
   if (test_euclidean_random) {
     testEuclidean(
       s"test 16-element euclidean for ${N_RANDOM_TEST} inputs",
-      Seq.fill(N_RANDOM_TEST)(RandomSWData.genRandomVector(-10.0f, 10.0f, 48)),
-      Seq.fill(N_RANDOM_TEST)(RandomSWData.genRandomVector(-10.0f, 10.0f, 48))
+      vec_a,
+      vec_b
     )
     // testEuclidean("test 16 element euclidean",
     // Seq(default_vec_a), Seq(default_vec_b)
