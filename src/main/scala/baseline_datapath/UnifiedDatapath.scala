@@ -29,8 +29,14 @@ object DatapathConstants {
 class UnifiedDatapath(p: RaytracerParams) extends Module {
   import DatapathConstants._
 
-  assert(p.io_recorded_float == false, " we don't support recorded-format Input/Output")
-  assert(p.internal_recorded_float == true, " we don't support standard-format intermediates")
+  assert(
+    p.io_recorded_float == false,
+    " we don't support recorded-format Input/Output"
+  )
+  assert(
+    p.internal_recorded_float == true,
+    " we don't support standard-format intermediates"
+  )
 
   // input is guaranteed to be registered by this module
   val in = IO(
@@ -205,23 +211,27 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
         }
 
       }
-      is(UnifiedDatapathOpCode.OpEuclidean){
+      is(UnifiedDatapathOpCode.OpEuclidean) {
         // if the elaboration parameter `p` does not support euclidean, this
-        // block will just be empty. 
-        if(p.support_euclidean.isDefined){
-          assert(p.support_euclidean.get == 16, "right now we only support 16-element wide interface for euclidean.")
+        // block will just be empty.
+        if (p.support_euclidean.isDefined) {
+          assert(
+            p.support_euclidean.get == 16,
+            "right now we only support 16-element wide interface for euclidean."
+          )
           assert(intake.vec_a.length == p.support_euclidean.get)
           // save the difference in euclidean_a
-          val _dest = emit.vec_a.getElements 
+          val _dest = emit.vec_a.getElements
           val _src1 = intake.vec_a.getElements
           val _src2 = intake.vec_b.getElements
           assert(_dest.length <= fu_list.length)
 
-          (_src1 zip _src2 zip _dest zip fu_list) foreach {case(((_1, _2), _3), fu) =>
-            fu.io.subOp := true.B 
-            fu.io.a := _1 
-            fu.io.b := _2 
-            _3 := fu.io.out
+          (_src1 zip _src2 zip _dest zip fu_list) foreach {
+            case (((_1, _2), _3), fu) =>
+              fu.io.subOp := true.B
+              fu.io.a := _1
+              fu.io.b := _2
+              _3 := fu.io.out
             // TODO: handle exception flags!
           }
         }
@@ -353,30 +363,33 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           // TODO: handle exception flags!
         }
 
-      }      
-      is(UnifiedDatapathOpCode.OpEuclidean){
+      }
+      is(UnifiedDatapathOpCode.OpEuclidean) {
         // if the elaboration parameter `p` does not support euclidean, this
-        // block will just be empty. 
-        if(p.support_euclidean.isDefined){
-          assert(p.support_euclidean.get == 16, "right now we only support 16-element wide interface for euclidean.")
+        // block will just be empty.
+        if (p.support_euclidean.isDefined) {
+          assert(
+            p.support_euclidean.get == 16,
+            "right now we only support 16-element wide interface for euclidean."
+          )
           assert(intake.vec_a.length == p.support_euclidean.get)
-          
+
           // save the squares in euclidean_a
-          val _dest = emit.vec_a.getElements 
+          val _dest = emit.vec_a.getElements
           val _src1 = intake.vec_a.getElements
           val _src2 = _src1
           assert(_dest.length <= fu_list.length)
 
-          (_src1 zip _src2 zip _dest zip fu_list) foreach {case(((_1, _2), _3), fu) =>
-            fu.io.a := _1 
-            fu.io.b := _2 
-            _3 := fu.io.out
+          (_src1 zip _src2 zip _dest zip fu_list) foreach {
+            case (((_1, _2), _3), fu) =>
+              fu.io.a := _1
+              fu.io.b := _2
+              _3 := fu.io.out
             // TODO: handle exception flags!
           }
         }
       }
     }
-    
 
     emit
   })
@@ -450,9 +463,12 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
       is(UnifiedDatapathOpCode.OpQuadbox) {
         // nothing
       }
-      is(UnifiedDatapathOpCode.OpEuclidean){
-        if(p.support_euclidean.isDefined){
-          assert(p.support_euclidean.get == 16, "right now we only support 16-element wide interface for euclidean.")
+      is(UnifiedDatapathOpCode.OpEuclidean) {
+        if (p.support_euclidean.isDefined) {
+          assert(
+            p.support_euclidean.get == 16,
+            "right now we only support 16-element wide interface for euclidean."
+          )
           assert(intake.vec_a.length == p.support_euclidean.get)
 
           // we add a(idx) and a(idx+8), output the result to a(idx)
@@ -460,11 +476,12 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val _src1 = intake.vec_a.take(8)
           val _src2 = intake.vec_a.drop(8)
           assert(_dest.length <= fu_list.length)
-          (_src1 zip _src2 zip _dest zip fu_list).foreach{case(((_1, _2), _3), fu)=>
-            fu.io.a := _1 
-            fu.io.b := _2 
-            _3 := fu.io.out
-            fu.io.subOp := false.B  
+          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+            case (((_1, _2), _3), fu) =>
+              fu.io.a := _1
+              fu.io.b := _2
+              _3 := fu.io.out
+              fu.io.subOp := false.B
           }
         }
       }
@@ -530,14 +547,14 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
-    val fu_list = List.fill[AddRecFN](4){
+    val fu_list = List.fill[AddRecFN](4) {
       val fu = Module(new AddRecFN(8, 24))
       fu.io.subOp := false.B
       fu.io.a := 0.U
       fu.io.b := 0.U
       fu.io.roundingMode := _rounding_rule
       fu.io.detectTininess := _tininess_rule
-      
+
       fu
     }
 
@@ -558,22 +575,26 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           intake.V_subtrahend,
           intake.W_subtrahend
         )
-        (_dest zip _src1 zip _src2 zip fu_list).map { case (((_1, _2), _3), fu) =>
-          fu.io.subOp := true.B
-          fu.io.a := _2
-          fu.io.b := _3
-          fu.io.roundingMode := _rounding_rule
-          fu.io.detectTininess := _tininess_rule
+        (_dest zip _src1 zip _src2 zip fu_list).map {
+          case (((_1, _2), _3), fu) =>
+            fu.io.subOp := true.B
+            fu.io.a := _2
+            fu.io.b := _3
+            fu.io.roundingMode := _rounding_rule
+            fu.io.detectTininess := _tininess_rule
 
-          _1 := fu.io.out
-        // handle exception flags!
+            _1 := fu.io.out
+          // handle exception flags!
         }
 
       }
       is(UnifiedDatapathOpCode.OpQuadbox) {}
-      is(UnifiedDatapathOpCode.OpEuclidean){
-        if(p.support_euclidean.isDefined){
-          assert(p.support_euclidean.get == 16, "right now we only support 16-element wide interface for euclidean.")
+      is(UnifiedDatapathOpCode.OpEuclidean) {
+        if (p.support_euclidean.isDefined) {
+          assert(
+            p.support_euclidean.get == 16,
+            "right now we only support 16-element wide interface for euclidean."
+          )
           assert(intake.vec_a.length == p.support_euclidean.get)
 
           // we add a(idx) and a(idx+4), output the result to a(idx)
@@ -584,11 +605,12 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
 
           // the zipped seq will be limited in length by the shorted component,
           // so it's 4 elements long
-          (_src1 zip _src2 zip _dest zip fu_list).foreach{case(((_1, _2), _3), fu)=>
-            fu.io.a := _1 
-            fu.io.b := _2 
-            _3 := fu.io.out
-            fu.io.subOp := false.B  
+          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+            case (((_1, _2), _3), fu) =>
+              fu.io.a := _1
+              fu.io.b := _2
+              _3 := fu.io.out
+              fu.io.subOp := false.B
           }
         }
       }
@@ -642,14 +664,14 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
-    val fu_list = List.fill[AddRecFN](2){
+    val fu_list = List.fill[AddRecFN](2) {
       val fu = Module(new AddRecFN(8, 24))
       fu.io.subOp := false.B
       fu.io.a := 0.U
       fu.io.b := 0.U
       fu.io.roundingMode := _rounding_rule
       fu.io.detectTininess := _tininess_rule
-      
+
       fu
     }
 
@@ -671,9 +693,12 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
 
       }
       is(UnifiedDatapathOpCode.OpQuadbox) {}
-      is(UnifiedDatapathOpCode.OpEuclidean){
-        if(p.support_euclidean.isDefined){
-          assert(p.support_euclidean.get == 16, "right now we only support 16-element wide interface for euclidean.")
+      is(UnifiedDatapathOpCode.OpEuclidean) {
+        if (p.support_euclidean.isDefined) {
+          assert(
+            p.support_euclidean.get == 16,
+            "right now we only support 16-element wide interface for euclidean."
+          )
           assert(intake.vec_a.length == p.support_euclidean.get)
 
           // we add a(idx) and a(idx+2), output the result to a(idx)
@@ -684,11 +709,12 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
 
           // the zipped seq will be limited in length by the shortest component,
           // so it's 2 elements long
-          (_src1 zip _src2 zip _dest zip fu_list).foreach{case(((_1, _2), _3), fu)=>
-            fu.io.a := _1 
-            fu.io.b := _2 
-            _3 := fu.io.out
-            fu.io.subOp := false.B  
+          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+            case (((_1, _2), _3), fu) =>
+              fu.io.a := _1
+              fu.io.b := _2
+              _3 := fu.io.out
+              fu.io.subOp := false.B
           }
         }
       }
@@ -703,14 +729,14 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
-    val fu_list = List.fill[AddRecFN](2){
+    val fu_list = List.fill[AddRecFN](2) {
       val fu = Module(new AddRecFN(8, 24))
       fu.io.subOp := false.B
       fu.io.a := 0.U
       fu.io.b := 0.U
       fu.io.roundingMode := _rounding_rule
       fu.io.detectTininess := _tininess_rule
-      
+
       fu
     }
 
@@ -732,9 +758,12 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
 
       }
       is(UnifiedDatapathOpCode.OpQuadbox) {}
-      is(UnifiedDatapathOpCode.OpEuclidean){
-        if(p.support_euclidean.isDefined){
-          assert(p.support_euclidean.get == 16, "right now we only support 16-element wide interface for euclidean.")
+      is(UnifiedDatapathOpCode.OpEuclidean) {
+        if (p.support_euclidean.isDefined) {
+          assert(
+            p.support_euclidean.get == 16,
+            "right now we only support 16-element wide interface for euclidean."
+          )
           assert(intake.vec_a.length == p.support_euclidean.get)
 
           // we add a(idx) and a(idx+1), output the result to a(idx)
@@ -745,11 +774,12 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
 
           // the zipped seq will be limited in length by the shortest component,
           // so it's 1 elements long
-          (_src1 zip _src2 zip _dest zip fu_list).foreach{case(((_1, _2), _3), fu)=>
-            fu.io.a := _1 
-            fu.io.b := _2 
-            _3 := fu.io.out
-            fu.io.subOp := false.B  
+          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+            case (((_1, _2), _3), fu) =>
+              fu.io.a := _1
+              fu.io.b := _2
+              _3 := fu.io.out
+              fu.io.subOp := false.B
           }
         }
       }
@@ -909,24 +939,24 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
         }
 
       }
-      is(UnifiedDatapathOpCode.OpEuclidean){
-        if(p.support_euclidean.isDefined){
+      is(UnifiedDatapathOpCode.OpEuclidean) {
+        if (p.support_euclidean.isDefined) {
           assert(p.support_euclidean.get == intake.vec_a.length)
           val accumulator = RegInit(0.U.asTypeOf(intake.vec_a(0)))
           val accum_adder = Module(new AddRecFN(8, 24))
           accum_adder.io.a := accumulator
           accum_adder.io.b := intake.vec_a(0)
           accum_adder.io.subOp := false.B
-          accum_adder.io.detectTininess := _tininess_rule 
+          accum_adder.io.detectTininess := _tininess_rule
           accum_adder.io.roundingMode := _rounding_rule
 
           emit.vec_accum_val(0) := accum_adder.io.out
 
           // the accumulator is cleared on when intake.vec_reset_accum is
           // asserted
-          when(intake.vec_reset_accum(0)){
+          when(intake.vec_reset_accum(0)) {
             accumulator := 0.U
-          }.otherwise{
+          }.otherwise {
             accumulator := accum_adder.io.out
           }
         }
@@ -984,7 +1014,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
         }
         if (p.support_euclidean.isDefined) {
           println("datapath supports euclidean!")
-          for(idx <- 0 until p.support_euclidean.get){
+          for (idx <- 0 until p.support_euclidean.get) {
             output.vec_a(idx) := recFNFromFN(8, 24, input.euclidean_a(idx))
             output.vec_b(idx) := recFNFromFN(8, 24, input.euclidean_b(idx))
           }
@@ -999,15 +1029,6 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   stage_2_actual_module.intake :<>= in
   stage_modules(3).intake :<>= stage_2_actual_module.emit
 
-  val input_a = Wire(Vec(16,Bits(32.W)))
-  val diff = Wire(Vec(16, Bits(32.W)))
-  val square = Wire(Vec(16, Bits(32.W)))
-  for(idx <- 0 until 16){
-    input_a(idx) := fNFromRecFN(8, 24, stage_2_actual_module.emit.bits.vec_a(idx))
-    diff(idx) := fNFromRecFN(8, 24, stage_modules(3).emit.bits.vec_a(idx))
-    square(idx) := fNFromRecFN(8, 24, stage_modules(4).emit.bits.vec_a(idx))
-  }
-  
   ////////////////////////
   // TAP OUTPUT FROM LAST MEANINGFUL STAGE'S OUTPUT BUFFER
   /////////////////////////
@@ -1027,7 +1048,11 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
         output.t_num := fNFromRecFN(8, 24, input.t_num)
         output.triangle_hit := input.triangle_hit
         if (p.support_euclidean.isDefined) {
-          output.euclidean_accumulator(0) := fNFromRecFN(8, 24, input.vec_accum_val(0))
+          output.euclidean_accumulator(0) := fNFromRecFN(
+            8,
+            24,
+            input.vec_accum_val(0)
+          )
           output.euclidean_reset_accum(0) := input.vec_reset_accum(0)
         }
         output

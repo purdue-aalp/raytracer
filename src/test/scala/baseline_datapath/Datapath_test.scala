@@ -50,12 +50,8 @@ class UnifiedDatapath_wrapper
 
 class UnifiedDatapath_wrapper_16
     extends UnifiedDatapath(p = RaytracerParams(false, true, Some(16))) {
-      import hardfloat._
+  import hardfloat._
   val exposed_time = expose(_time)
-  val exposed_input_a = expose(input_a)
-  val exposed_diff = expose(diff)
-  val exposed_square = expose(square)
-
 }
 
 class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
@@ -65,18 +61,18 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   type HW_Box = baseline_datapath.AABB
 
   val r = new Random()
-  val N_RANDOM_TEST = 500
+  val N_RANDOM_TEST = 20000
   val PRINT_END_TIME = true
   val float_tolerance_error =
     0.001 // normalized error: 149 vs 100 would have an error of 0.49
   val use_stage_submodule = false
   val dump_vcd_for_unified_test = false
-  val test_ray_box_specific = false
-  val test_ray_triangle_specific = false
-  val test_ray_box_random = false
-  val test_ray_triangle_random = false
+  val test_ray_box_specific = true
+  val test_ray_triangle_specific = true
+  val test_ray_box_random = true
+  val test_ray_triangle_random = true
   val test_euclidean_random = true
-  val test_unified_random = false
+  val test_unified_random = true
 
   val default_vec_a = SW_Vector((0 until 16).toList.map(_.toFloat))
   val default_vec_b = SW_Vector((16 until 0 by -1).toList.map(_.toFloat))
@@ -377,8 +373,8 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       seq_vec_a: Seq[SW_Vector],
       seq_vec_b: Seq[SW_Vector]
   ): Unit = description in {
-    seq_vec_b.foreach{v=>assert(v.dim == 16)}
-    seq_vec_a.foreach{v=>assert(v.dim == 16)}
+    seq_vec_b.foreach { v => assert(v.dim == 16) }
+    seq_vec_a.foreach { v => assert(v.dim == 16) }
 
     val combined_data_list: List[SW_EnhancedCombinedData] = List.from {
       (seq_vec_a zip seq_vec_b).map { case (a, b) =>
@@ -394,39 +390,50 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
         )
       }
     }
-    val result_list = (seq_vec_a zip seq_vec_b).map{case(va, vb) =>
-      va.calc_diff(vb)  
+    val result_list = (seq_vec_a zip seq_vec_b).map { case (va, vb) =>
+      va.calc_diff(vb)
     }
     var worst_normalized_diff = 0.0f
-    test(new UnifiedDatapath_wrapper_16).withAnnotations(
-      chisel_test_annotations :++ {
-        if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }
-        else { Nil }
-      }
-      // chisel_test_annotations
+    test(new UnifiedDatapath_wrapper_16)
+      .withAnnotations(
+        chisel_test_annotations :++ {
+          if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }
+          else { Nil }
+        }
+        // chisel_test_annotations
       )
       .withChiselAnnotations(
         chisel_test_chisel_annotations
-      ){ dut => 
-          dut.in.initSource().setSourceClock(dut.clock)
-          dut.out.initSink().setSinkClock(dut.clock)
+      ) { dut =>
+        dut.in.initSource().setSourceClock(dut.clock)
+        dut.out.initSink().setSinkClock(dut.clock)
 
-          fork{
-            dut.in.enqueueSeq(combined_data_list)
-          }.fork{
-            (combined_data_list zip result_list).zipWithIndex.foreach{case((sw_input, sw_sum), idx) => 
+        fork {
+          dut.in.enqueueSeq(combined_data_list)
+        }.fork {
+          dut.out.ready.poke(true.B)
+          (combined_data_list zip result_list).zipWithIndex.foreach {
+            case ((sw_input, sw_sum), idx) =>
               dut.out.waitForValid()
-              println(s"${idx}: sw_input: ${sw_input.vector_a.get_elements()}, ${sw_input.vector_b.get_elements()}, sw_result: ${sw_sum}, hardware result: ${bitsToFloat(dut.out.bits.euclidean_accumulator(0).peek())}")
+              // println(s"${idx}: sw_input: ${sw_input.vector_a.get_elements()}, ${sw_input.vector_b.get_elements()}, sw_result: ${sw_sum}, hardware result: ${bitsToFloat(dut.out.bits.euclidean_accumulator(0).peek())}")
               // assert(sw_sum ==
               // bitsToFloat(dut.out.bits.euclidean_accumulator(0).peek()))
-              val normalized_diff = abs(sw_sum - bitsToFloat(dut.out.bits.euclidean_accumulator(0).peek())) / sw_sum
-              if(normalized_diff > worst_normalized_diff) worst_normalized_diff = normalized_diff
+              val normalized_diff = abs(
+                sw_sum - bitsToFloat(
+                  dut.out.bits.euclidean_accumulator(0).peek()
+                )
+              ) / sw_sum
+              if (normalized_diff > worst_normalized_diff)
+                worst_normalized_diff = normalized_diff
               dut.clock.step()
-            }
+          }
+        }.join()
 
-          }.join()
-          println(s"worse normalzied diff is ${worst_normalized_diff}")
-    }
+        println(s"worse normalzied diff is ${worst_normalized_diff}")
+        if (PRINT_END_TIME) {
+          println(s"test ends at time ${dut.clock.getStepCount}")
+        }
+      }
   }
 
   def testUnifiedIntersection(
@@ -751,8 +758,9 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     )
   }
 
-  if(test_euclidean_random){
-    testEuclidean(s"test 16-element euclidean for ${N_RANDOM_TEST} inputs",
+  if (test_euclidean_random) {
+    testEuclidean(
+      s"test 16-element euclidean for ${N_RANDOM_TEST} inputs",
       Seq.fill(N_RANDOM_TEST)(RandomSWData.genRandomVector(-10.0f, 10.0f, 16)),
       Seq.fill(N_RANDOM_TEST)(RandomSWData.genRandomVector(-10.0f, 10.0f, 16))
     )
