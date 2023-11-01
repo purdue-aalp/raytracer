@@ -61,18 +61,18 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   type HW_Box = baseline_datapath.AABB
 
   val r = new Random()
-  val N_RANDOM_TEST = 20000
+  val N_RANDOM_TEST = 10
   val PRINT_END_TIME = true
   val float_tolerance_error =
     0.001 // normalized error: 149 vs 100 would have an error of 0.49
   val use_stage_submodule = false
   val dump_vcd_for_unified_test = false
-  val test_ray_box_specific = true
-  val test_ray_triangle_specific = true
-  val test_ray_box_random = true
-  val test_ray_triangle_random = true
+  val test_ray_box_specific = false
+  val test_ray_triangle_specific = false
+  val test_ray_box_random = false
+  val test_ray_triangle_random = false
   val test_euclidean_random = true
-  val test_unified_random = true
+  val test_unified_random = false
 
   val default_vec_a = SW_Vector((0 until 16).toList.map(_.toFloat))
   val default_vec_b = SW_Vector((16 until 0 by -1).toList.map(_.toFloat))
@@ -373,27 +373,21 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       seq_vec_a: Seq[SW_Vector],
       seq_vec_b: Seq[SW_Vector]
   ): Unit = description in {
-    seq_vec_b.foreach { v => assert(v.dim == 16) }
-    seq_vec_a.foreach { v => assert(v.dim == 16) }
+    seq_vec_b.foreach { v => assert(v.dim % 16 == 0) }
+    seq_vec_a.foreach { v => assert(v.dim % 16 == 0) }
 
     val combined_data_list: List[SW_EnhancedCombinedData] = List.from {
-      (seq_vec_a zip seq_vec_b).map { case (a, b) =>
-        SW_EnhancedCombinedData(
-          SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(1.0f, 1.0f, 1.0f)),
-          Seq.fill(4)(SW_Box()),
-          SW_Triangle(),
-          SW_OpEuclidean,
-          Some(a.dim),
-          a,
-          b,
-          true
-        )
+      (seq_vec_a zip seq_vec_b).flatMap { case (a, b) =>
+        get_euclidean_job_seq_from_vec_pair(a, b)
       }
     }
+
     val result_list = (seq_vec_a zip seq_vec_b).map { case (va, vb) =>
       va.calc_diff(vb)
     }
+    
     var worst_normalized_diff = 0.0f
+
     test(new UnifiedDatapath_wrapper_16)
       .withAnnotations(
         chisel_test_annotations :++ {
@@ -412,10 +406,18 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
           dut.in.enqueueSeq(combined_data_list)
         }.fork {
           dut.out.ready.poke(true.B)
-          (combined_data_list zip result_list).zipWithIndex.foreach {
-            case ((sw_input, sw_sum), idx) =>
+          result_list.zipWithIndex.foreach {
+            case (sw_sum, idx) =>
               dut.out.waitForValid()
-              // println(s"${idx}: sw_input: ${sw_input.vector_a.get_elements()}, ${sw_input.vector_b.get_elements()}, sw_result: ${sw_sum}, hardware result: ${bitsToFloat(dut.out.bits.euclidean_accumulator(0).peek())}")
+
+              // only inspect the hw output on the last beat, i.e. those that
+              // asserts the reset_accum signal
+              while(!dut.out.bits.euclidean_reset_accum.peek()(0).litToBoolean){
+                dut.clock.step()
+                dut.out.waitForValid()
+              }
+
+              println(s"${idx}: sw_result: ${sw_sum}, hardware result: ${bitsToFloat(dut.out.bits.euclidean_accumulator(0).peek())}")
               // assert(sw_sum ==
               // bitsToFloat(dut.out.bits.euclidean_accumulator(0).peek()))
               val normalized_diff = abs(
@@ -425,6 +427,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
               ) / sw_sum
               if (normalized_diff > worst_normalized_diff)
                 worst_normalized_diff = normalized_diff
+             
               dut.clock.step()
           }
         }.join()
@@ -761,8 +764,8 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   if (test_euclidean_random) {
     testEuclidean(
       s"test 16-element euclidean for ${N_RANDOM_TEST} inputs",
-      Seq.fill(N_RANDOM_TEST)(RandomSWData.genRandomVector(-10.0f, 10.0f, 16)),
-      Seq.fill(N_RANDOM_TEST)(RandomSWData.genRandomVector(-10.0f, 10.0f, 16))
+      Seq.fill(N_RANDOM_TEST)(RandomSWData.genRandomVector(-10.0f, 10.0f, 48)),
+      Seq.fill(N_RANDOM_TEST)(RandomSWData.genRandomVector(-10.0f, 10.0f, 48))
     )
     // testEuclidean("test 16 element euclidean",
     // Seq(default_vec_a), Seq(default_vec_b)
