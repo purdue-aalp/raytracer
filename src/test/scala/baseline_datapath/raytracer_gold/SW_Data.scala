@@ -127,6 +127,13 @@ class SW_Vector(val elements: Seq[Float]) {
   override def toString(): String = {
     elements.foldLeft("(") { case (str, ele) => str + s"${ele}, " } + ")"
   }
+
+  def calc_diff(other: SW_Vector): Float = {
+    assert(other.dim == dim)
+    elements.zip(other.get_elements()).map{case(a, b) => 
+      (a-b)*(a-b)  
+    }.reduce(_+_)
+  }
 }
 
 object SW_Vector {

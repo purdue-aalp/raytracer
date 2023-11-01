@@ -68,9 +68,10 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   val dump_vcd_for_unified_test = false
   val test_ray_box_specific = false
   val test_ray_triangle_specific = false
-  val test_ray_box_random = true
-  val test_ray_triangle_random = true
-  val test_unified_random = true
+  val test_ray_box_random = false
+  val test_ray_triangle_random = false
+  val test_euclidean_random = true
+  val test_unified_random = false
 
   val default_vec_a = SW_Vector((0 until 16).toList.map(_.toFloat))
   val default_vec_b = SW_Vector((16 until 0 by -1).toList.map(_.toFloat))
@@ -368,11 +369,14 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
   def testEuclidean(
       description: String,
-      vec_a: Seq[SW_Vector],
-      vec_b: Seq[SW_Vector]
+      seq_vec_a: Seq[SW_Vector],
+      seq_vec_b: Seq[SW_Vector]
   ): Unit = description in {
+    seq_vec_b.foreach{v=>assert(v.dim == 16)}
+    seq_vec_a.foreach{v=>assert(v.dim == 16)}
+
     val combined_data_list: List[SW_EnhancedCombinedData] = List.from {
-      (vec_a zip vec_b).map { case (a, b) =>
+      (seq_vec_a zip seq_vec_b).map { case (a, b) =>
         SW_EnhancedCombinedData(
           SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(1.0f, 1.0f, 1.0f)),
           Seq.fill(4)(SW_Box()),
@@ -384,6 +388,32 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
           true
         )
       }
+    }
+    val result_list = (seq_vec_a zip seq_vec_b).map{case(va, vb) =>
+      va.calc_diff(vb)  
+    }
+    test(new UnifiedDatapath_wrapper_16).withAnnotations(
+      chisel_test_annotations :++ {
+        if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }
+        else { Nil }
+      }
+      // chisel_test_annotations
+      )
+      .withChiselAnnotations(
+        chisel_test_chisel_annotations
+      ){ dut => 
+          dut.in.initSource().setSourceClock(dut.clock)
+          dut.out.initSink().setSinkClock(dut.clock)
+
+          fork{
+            dut.in.enqueueSeq(combined_data_list)
+          }.fork{
+            result_list.foreach{sw_sum => 
+              dut.out.waitForValid()
+              println(s"sw_result: ${sw_sum}, hardware result: ${dut.out.bits.euclidean_accumulator(0).peek()}, hw_reset: ${dut.out.bits.euclidean_reset_accum(0).peek()}")
+              dut.clock.step()
+            }
+          }.join()
     }
   }
 
@@ -706,6 +736,13 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       Seq.fill(ray_seq_for_raybox.length)(SW_OpQuadbox) :++ Seq.fill(
         ray_seq_for_raytriangle.length
       )(SW_OpTriangle)
+    )
+  }
+
+  if(test_euclidean_random){
+    testEuclidean("test 16-element euclidean",
+      Seq.fill(8)(RandomSWData.genRandomVector(-10.0f, 10.0f, 16)),
+      Seq.fill(8)(RandomSWData.genRandomVector(-10.0f, 10.0f, 16))
     )
   }
 
