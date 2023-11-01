@@ -6,7 +6,7 @@ import chisel3._
   * nnumber alike. They both use the MSB to represent sign.
   */
 object FNFlipSign {
-  def apply(in: Bits): Bits  = {
+  def apply(in: Bits): Bits = {
     assert(in.widthKnown)
     val w = in.getWidth
 
@@ -17,8 +17,8 @@ object FNFlipSign {
 object FNAbsoluteVal {
   def apply(in: Bits): Bits = {
     assert(in.widthKnown)
-    val w = in.getWidth 
+    val w = in.getWidth
 
-    0.U(1.W) ## in(w-2, 0)
+    0.U(1.W) ## in(w - 2, 0)
   }
 }

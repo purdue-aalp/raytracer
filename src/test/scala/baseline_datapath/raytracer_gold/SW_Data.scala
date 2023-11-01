@@ -130,9 +130,12 @@ class SW_Vector(val elements: Seq[Float]) {
 
   def calc_diff(other: SW_Vector): Float = {
     assert(other.dim == dim)
-    elements.zip(other.get_elements()).map{case(a, b) => 
-      (a-b)*(a-b)  
-    }.reduce(_+_)
+    elements
+      .zip(other.get_elements())
+      .map { case (a, b) =>
+        (a - b) * (a - b)
+      }
+      .reduce(_ + _)
   }
 }
 
