@@ -89,8 +89,8 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       else "cached_verilator_backend/Datapath_monolithic"
     ),
     // WriteVcdAnnotation,
-    VerilatorCFlags(Seq("-O3", "-march=native")),
-    VerilatorLinkFlags(Seq("-O3", "-march=native")),
+    VerilatorCFlags(Seq("-Os", "-march=native")),
+    VerilatorLinkFlags(Seq("-Os", "-march=native")),
     VerilatorFlags(Seq("-O3", "--threads", "16"))
   )
   val chisel_test_chisel_annotations = Seq(
