@@ -50,7 +50,12 @@ class UnifiedDatapath_wrapper
 
 class UnifiedDatapath_wrapper_16
     extends UnifiedDatapath(p = RaytracerParams(false, true, Some(16))) {
+      import hardfloat._
   val exposed_time = expose(_time)
+  val exposed_input_a = expose(input_a)
+  val exposed_diff = expose(diff)
+  val exposed_square = expose(square)
+
 }
 
 class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
@@ -82,11 +87,11 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     VerilatorBackendAnnotation,
     CachingAnnotation,
     // CachingDebugAnnotation,
-    // TargetDirAnnotation(
-    //   if (use_stage_submodule)
-    //     "cached_verilator_backend/Datapath_stage_submodule"
-    //   else "cached_verilator_backend/Datapath_monolithic"
-    // ),
+    TargetDirAnnotation(
+      if (use_stage_submodule)
+        "cached_verilator_backend/Datapath_stage_submodule"
+      else "cached_verilator_backend/Datapath_monolithic"
+    ),
     // WriteVcdAnnotation,
     VerilatorCFlags(Seq("-O3", "-march=native")),
     VerilatorLinkFlags(Seq("-O3", "-march=native")),
@@ -392,6 +397,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     val result_list = (seq_vec_a zip seq_vec_b).map{case(va, vb) =>
       va.calc_diff(vb)  
     }
+    var worst_normalized_diff = 0.0f
     test(new UnifiedDatapath_wrapper_16).withAnnotations(
       chisel_test_annotations :++ {
         if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }
@@ -408,12 +414,18 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
           fork{
             dut.in.enqueueSeq(combined_data_list)
           }.fork{
-            result_list.foreach{sw_sum => 
+            (combined_data_list zip result_list).zipWithIndex.foreach{case((sw_input, sw_sum), idx) => 
               dut.out.waitForValid()
-              println(s"sw_result: ${sw_sum}, hardware result: ${dut.out.bits.euclidean_accumulator(0).peek()}, hw_reset: ${dut.out.bits.euclidean_reset_accum(0).peek()}")
+              println(s"${idx}: sw_input: ${sw_input.vector_a.get_elements()}, ${sw_input.vector_b.get_elements()}, sw_result: ${sw_sum}, hardware result: ${bitsToFloat(dut.out.bits.euclidean_accumulator(0).peek())}")
+              // assert(sw_sum ==
+              // bitsToFloat(dut.out.bits.euclidean_accumulator(0).peek()))
+              val normalized_diff = abs(sw_sum - bitsToFloat(dut.out.bits.euclidean_accumulator(0).peek())) / sw_sum
+              if(normalized_diff > worst_normalized_diff) worst_normalized_diff = normalized_diff
               dut.clock.step()
             }
+
           }.join()
+          println(s"worse normalzied diff is ${worst_normalized_diff}")
     }
   }
 
@@ -740,10 +752,13 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   }
 
   if(test_euclidean_random){
-    testEuclidean("test 16-element euclidean",
-      Seq.fill(8)(RandomSWData.genRandomVector(-10.0f, 10.0f, 16)),
-      Seq.fill(8)(RandomSWData.genRandomVector(-10.0f, 10.0f, 16))
+    testEuclidean(s"test 16-element euclidean for ${N_RANDOM_TEST} inputs",
+      Seq.fill(N_RANDOM_TEST)(RandomSWData.genRandomVector(-10.0f, 10.0f, 16)),
+      Seq.fill(N_RANDOM_TEST)(RandomSWData.genRandomVector(-10.0f, 10.0f, 16))
     )
+    // testEuclidean("test 16 element euclidean",
+    // Seq(default_vec_a), Seq(default_vec_b)
+    // )
   }
 
 }

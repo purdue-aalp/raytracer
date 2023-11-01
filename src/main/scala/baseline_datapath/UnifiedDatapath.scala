@@ -983,11 +983,14 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           reg_o := AABBConvertFNtoRecFN(reg_i)
         }
         if (p.support_euclidean.isDefined) {
-          output.vec_a := input.euclidean_a
-          output.vec_b := input.euclidean_b
+          println("datapath supports euclidean!")
+          for(idx <- 0 until p.support_euclidean.get){
+            output.vec_a(idx) := recFNFromFN(8, 24, input.euclidean_a(idx))
+            output.vec_b(idx) := recFNFromFN(8, 24, input.euclidean_b(idx))
+          }
           output.vec_mask := input.euclidean_mask
           output.vec_reset_accum := input.euclidean_reset_accum
-        }
+        } else println("datapath does not support euclidean!")
         output
       }
     )
@@ -996,6 +999,15 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   stage_2_actual_module.intake :<>= in
   stage_modules(3).intake :<>= stage_2_actual_module.emit
 
+  val input_a = Wire(Vec(16,Bits(32.W)))
+  val diff = Wire(Vec(16, Bits(32.W)))
+  val square = Wire(Vec(16, Bits(32.W)))
+  for(idx <- 0 until 16){
+    input_a(idx) := fNFromRecFN(8, 24, stage_2_actual_module.emit.bits.vec_a(idx))
+    diff(idx) := fNFromRecFN(8, 24, stage_modules(3).emit.bits.vec_a(idx))
+    square(idx) := fNFromRecFN(8, 24, stage_modules(4).emit.bits.vec_a(idx))
+  }
+  
   ////////////////////////
   // TAP OUTPUT FROM LAST MEANINGFUL STAGE'S OUTPUT BUFFER
   /////////////////////////

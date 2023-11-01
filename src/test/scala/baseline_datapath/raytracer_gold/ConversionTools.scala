@@ -196,10 +196,10 @@ object RaytracerTestHelper {
 
     lazy val dummy_aabb = new AABB(false)
 
-    vec_elements match {
+    val retval = vec_elements match {
       case 0 =>
         val dummy_eib = new EnhancedInputBundle(
-          RaytracerParams(false, true, sw_data.element_count)
+          RaytracerParams(false, true, None)
         )
         dummy_eib.Lit(
           _.opcode -> UnifiedDatapathOpCode(op.id.U),
@@ -340,7 +340,7 @@ object RaytracerTestHelper {
           _.euclidean_mask -> Vec.Lit((0xffff).U(16.W))
         )
     }
-
+    retval
   }
 
   implicit def fromSWEnhancedCombinedDataSeqToEnhancedInputBundleSeq(
