@@ -191,7 +191,6 @@ object RaytracerTestHelper {
     assert(sw_box.length == 4)
     assert(vec_elements == vec_a.dim)
     assert(vec_elements == vec_b.dim)
-    assert(vec_elements <= 64)
     val vec_a_as_bits = vec_a.get_elements().map(floatToBits(_))
     val vec_b_as_bits = vec_b.get_elements().map(floatToBits(_))
 

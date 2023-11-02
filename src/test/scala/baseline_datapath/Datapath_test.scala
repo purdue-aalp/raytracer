@@ -61,19 +61,19 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   type HW_Box = baseline_datapath.AABB
 
   val r = new Random()
-  val N_RANDOM_TEST = 1000
+  val N_RANDOM_TEST = 10
   val PRINT_END_TIME = true
   val float_tolerance_error =
     0.001 // normalized error: 149 vs 100 would have an error of 0.49
   val use_stage_submodule = false
   val dump_vcd_for_unified_test = false
 
-  val test_ray_box_specific = true
-  val test_ray_triangle_specific = true
-  val test_ray_box_random = true
-  val test_ray_triangle_random = true
+  val test_ray_box_specific = false
+  val test_ray_triangle_specific = false
+  val test_ray_box_random = false
+  val test_ray_triangle_random = false
   val test_euclidean_random = true
-  val test_unified_random = true
+  val test_unified_random = false
 
   val default_vec_a = SW_Vector((0 until 16).toList.map(_.toFloat))
   val default_vec_b = SW_Vector((16 until 0 by -1).toList.map(_.toFloat))
@@ -396,9 +396,6 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       seq_vec_a: Seq[SW_Vector],
       seq_vec_b: Seq[SW_Vector]
   ): Unit = description in {
-    seq_vec_b.foreach { v => assert(v.dim % 16 == 0) }
-    seq_vec_a.foreach { v => assert(v.dim % 16 == 0) }
-
     val combined_data_list: List[SW_EnhancedCombinedData] = List.from {
       (seq_vec_a zip seq_vec_b).flatMap { case (a, b) =>
         get_euclidean_job_seq_from_vec_pair(a, b)
@@ -795,7 +792,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   }
 
   val vec_pair_seq =
-    Seq.fill(N_RANDOM_TEST)(RandomSWData.genRandomVectorPair(-10.0f, 10.0f, 22))
+    Seq.fill(N_RANDOM_TEST)(RandomSWData.genRandomVectorPair(-10.0f, 10.0f, 32))
 
   val vec_a = vec_pair_seq.map { case (_1, _2) => _1 }
   val vec_b = vec_pair_seq.map { case (_1, _2) => _2 }

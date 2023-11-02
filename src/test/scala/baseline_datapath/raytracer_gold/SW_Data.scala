@@ -195,14 +195,14 @@ object get_euclidean_job_seq_from_vec_pair {
   // Given n in range [1, 16], returns a 16-bit mask encoded in an Int.
   // Bits (15) ~ (15-n-1) are marked as one, all other bits in the mask are
   // zero.
-  // E.g. n=3 => mask = 0xe000
+  // E.g. n=3 => mask = 0x0007
   def generate_mask(n: Int): Int = {
     def get_single_bit_mask(n: Int): Int = {
       // n      = 1, 2, 3, ... 16
-      // retval = 8000, 4000, 2000, ... 0001
+      // retval = 0001, 0002, 0004, ... 8000
       assert(0 < n, "n must be positive")
       assert(n <= 16, "n must be less than 17")
-      1 << (16 - n)
+      1 << (n - 1)
     }
     // masks(0) is meaningless, masks(1~16) relate to n=1~16
     lazy val masks: Seq[Int] = Seq.tabulate(17) { idx =>
@@ -216,7 +216,6 @@ object get_euclidean_job_seq_from_vec_pair {
       vec_b: SW_Vector
   ): Seq[SW_EnhancedCombinedData] = {
     assert(vec_b.dim == vec_a.dim)
-    assert(vec_a.dim % 16 == 0)
     import scala.math._
     val beats: Int = (vec_a.dim / 16.0f).ceil.toInt
 
@@ -226,10 +225,10 @@ object get_euclidean_job_seq_from_vec_pair {
     ): Seq[SW_EnhancedCombinedData] = vec_pair match {
       case (Nil, Nil) => Nil
       case _ =>
-        val (vec_a_first_best, vec_a_remaining) = vec_pair._1.splitAt(16)
-        val (vec_b_first_best, vec_b_remaining) = vec_pair._2.splitAt(16)
-        val last_beat = if (vec_pair._1.length == 16) true else false
-        val vec_length = vec_a_first_best.length
+        val (vec_a_first_beat, vec_a_remaining) = vec_pair._1.splitAt(16)
+        val (vec_b_first_beat, vec_b_remaining) = vec_pair._2.splitAt(16)
+        val last_beat = if (vec_pair._1.length <= 16) true else false
+        val vec_length = vec_a_first_beat.length
 
         val one_job = SW_EnhancedCombinedData(
           SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(1.0f, 1.0f, 1.0f)),
@@ -237,8 +236,8 @@ object get_euclidean_job_seq_from_vec_pair {
           SW_Triangle(),
           SW_OpEuclidean,
           Some(16),
-          SW_Vector(vec_a_first_best),
-          SW_Vector(vec_b_first_best),
+          SW_Vector(vec_a_first_beat.padTo(16, 0.0f)),
+          SW_Vector(vec_b_first_beat.padTo(16, 0.0f)),
           last_beat,
           generate_mask(vec_length)
         )
@@ -333,16 +332,17 @@ object RandomSWData {
     )
   }
 
+  // the SW_Vector returned from this method is arbitrarily long.
   def genRandomVector(
       lower_bound: Float,
       upper_bound: Float,
-      beat: Int
+      length: Int
   ): SW_Vector = {
     import scala.util.Random
     lazy val r = new Random()
 
     SW_Vector(
-      Seq.fill(beat * 16)(
+      Seq.fill(length)(
         r.nextFloat() * (upper_bound - lower_bound) + lower_bound
       )
     )
@@ -351,15 +351,15 @@ object RandomSWData {
   def genRandomVectorPair(
       lower_bound: Float,
       upper_bound: Float,
-      largest_beat: Int
+      largest_length: Int
   ): (SW_Vector, SW_Vector) = {
     import scala.util.Random
     lazy val r = new Random()
 
-    val _beat = r.nextInt(largest_beat) + 1
+    val _length = r.nextInt(largest_length) + 1
     (
-      genRandomVector(lower_bound, upper_bound, _beat),
-      genRandomVector(lower_bound, upper_bound, _beat)
+      genRandomVector(lower_bound, upper_bound, _length),
+      genRandomVector(lower_bound, upper_bound, _length)
     )
   }
 }
