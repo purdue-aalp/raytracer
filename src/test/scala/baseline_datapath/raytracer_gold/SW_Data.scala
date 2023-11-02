@@ -161,7 +161,8 @@ case class SW_EnhancedCombinedData(
     val element_count: Option[Int],
     val vector_a: SW_Vector,
     val vector_b: SW_Vector,
-    val reset_accum: Boolean
+    val reset_accum: Boolean,
+    val vector_mask: Int
 )
 
 case class SW_RayBox_Result(
@@ -182,24 +183,53 @@ case class SW_Unified_Result(
     val box_result: SW_RayBox_Result
 )
 
+/// The two SW_Vectors may be of any length (not multiples of 16). This method
+/// breaks down and transforms the SW_Vector into a sequence of
+/// SW_EnhancedCombinedData objects, each of which contains only a pair of
+/// 16-length SW_Vectors, and a bit mask indicating which elements of the
+/// SW_Vectors are valid.
+/// E.g. If the input SW_Vector has dim==17, the first object in the return
+/// sequence has a fully-on bit mask (0xffff), and the second object has a mask
+/// of 0xc000.
 object get_euclidean_job_seq_from_vec_pair {
+  // Given n in range [1, 16], returns a 16-bit mask encoded in an Int.
+  // Bits (15) ~ (15-n-1) are marked as one, all other bits in the mask are
+  // zero.
+  // E.g. n=3 => mask = 0xe000
+  def generate_mask(n: Int): Int = {
+    def get_single_bit_mask(n: Int): Int = {
+      // n      = 1, 2, 3, ... 16
+      // retval = 8000, 4000, 2000, ... 0001
+      assert(0 < n, "n must be positive")
+      assert(n <= 16, "n must be less than 17")
+      1 << (16 - n)
+    }
+    // masks(0) is meaningless, masks(1~16) relate to n=1~16
+    lazy val masks: Seq[Int] = Seq.tabulate(17) { idx =>
+      (1 to idx).foldLeft(0) { case (l, r) => l + get_single_bit_mask(r) }
+    }
+    masks(n)
+  }
+
   def apply(
       vec_a: SW_Vector,
       vec_b: SW_Vector
   ): Seq[SW_EnhancedCombinedData] = {
     assert(vec_b.dim == vec_a.dim)
     assert(vec_a.dim % 16 == 0)
+    import scala.math._
+    val beats: Int = (vec_a.dim / 16.0f).ceil.toInt
 
-    val beats: Int = vec_a.dim / 16
-
+    // a recursive way to convert arbitrarily long vectors into a seq of SW_EnhancedCombinedData
     def job_seq(
         vec_pair: (Seq[Float], Seq[Float])
     ): Seq[SW_EnhancedCombinedData] = vec_pair match {
       case (Nil, Nil) => Nil
       case _ =>
-        val (vec_a_first_sixteen, vec_a_remaining) = vec_pair._1.splitAt(16)
-        val (vec_b_first_sixteen, vec_b_remaining) = vec_pair._2.splitAt(16)
+        val (vec_a_first_best, vec_a_remaining) = vec_pair._1.splitAt(16)
+        val (vec_b_first_best, vec_b_remaining) = vec_pair._2.splitAt(16)
         val last_beat = if (vec_pair._1.length == 16) true else false
+        val vec_length = vec_a_first_best.length
 
         val one_job = SW_EnhancedCombinedData(
           SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(1.0f, 1.0f, 1.0f)),
@@ -207,9 +237,10 @@ object get_euclidean_job_seq_from_vec_pair {
           SW_Triangle(),
           SW_OpEuclidean,
           Some(16),
-          SW_Vector(vec_a_first_sixteen),
-          SW_Vector(vec_b_first_sixteen),
-          last_beat
+          SW_Vector(vec_a_first_best),
+          SW_Vector(vec_b_first_best),
+          last_beat,
+          generate_mask(vec_length)
         )
         one_job +: job_seq((vec_a_remaining, vec_b_remaining))
     }

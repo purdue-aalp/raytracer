@@ -37,6 +37,10 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     p.internal_recorded_float == true,
     " we don't support standard-format intermediates"
   )
+  assert(
+    p.support_euclidean.getOrElse(16) == 16,
+    " raytracer currently only support processing 16-element vector pairs for euclidean distance calculation"
+  )
 
   // input is guaranteed to be registered by this module
   val in = IO(
@@ -215,23 +219,23 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
         // if the elaboration parameter `p` does not support euclidean, this
         // block will just be empty.
         if (p.support_euclidean.isDefined) {
-          assert(
-            p.support_euclidean.get == 16,
-            "right now we only support 16-element wide interface for euclidean."
-          )
           assert(intake.vec_a.length == p.support_euclidean.get)
           // save the difference in euclidean_a
           val _dest = emit.vec_a.getElements
           val _src1 = intake.vec_a.getElements
           val _src2 = intake.vec_b.getElements
+          val _mask = intake.vec_mask(0).asBools
           assert(_dest.length <= fu_list.length)
+          assert(_mask.length == _dest.length)
 
-          (_src1 zip _src2 zip _dest zip fu_list) foreach {
-            case (((_1, _2), _3), fu) =>
+          (_src1 zip _src2 zip _dest zip fu_list zip _mask) foreach {
+            case ((((_1, _2), _3), fu), m) =>
               fu.io.subOp := true.B
               fu.io.a := _1
               fu.io.b := _2
-              _3 := fu.io.out
+
+              // output zero if this element is masked-away
+              _3 := Mux(m, fu.io.out, _zero_RecFN)
             // TODO: handle exception flags!
           }
         }
@@ -368,10 +372,6 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
         // if the elaboration parameter `p` does not support euclidean, this
         // block will just be empty.
         if (p.support_euclidean.isDefined) {
-          assert(
-            p.support_euclidean.get == 16,
-            "right now we only support 16-element wide interface for euclidean."
-          )
           assert(intake.vec_a.length == p.support_euclidean.get)
 
           // save the squares in euclidean_a
@@ -465,10 +465,6 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
       }
       is(UnifiedDatapathOpCode.OpEuclidean) {
         if (p.support_euclidean.isDefined) {
-          assert(
-            p.support_euclidean.get == 16,
-            "right now we only support 16-element wide interface for euclidean."
-          )
           assert(intake.vec_a.length == p.support_euclidean.get)
 
           // we add a(idx) and a(idx+8), output the result to a(idx)
@@ -591,10 +587,6 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
       is(UnifiedDatapathOpCode.OpQuadbox) {}
       is(UnifiedDatapathOpCode.OpEuclidean) {
         if (p.support_euclidean.isDefined) {
-          assert(
-            p.support_euclidean.get == 16,
-            "right now we only support 16-element wide interface for euclidean."
-          )
           assert(intake.vec_a.length == p.support_euclidean.get)
 
           // we add a(idx) and a(idx+4), output the result to a(idx)
@@ -695,10 +687,6 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
       is(UnifiedDatapathOpCode.OpQuadbox) {}
       is(UnifiedDatapathOpCode.OpEuclidean) {
         if (p.support_euclidean.isDefined) {
-          assert(
-            p.support_euclidean.get == 16,
-            "right now we only support 16-element wide interface for euclidean."
-          )
           assert(intake.vec_a.length == p.support_euclidean.get)
 
           // we add a(idx) and a(idx+2), output the result to a(idx)
@@ -760,10 +748,6 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
       is(UnifiedDatapathOpCode.OpQuadbox) {}
       is(UnifiedDatapathOpCode.OpEuclidean) {
         if (p.support_euclidean.isDefined) {
-          assert(
-            p.support_euclidean.get == 16,
-            "right now we only support 16-element wide interface for euclidean."
-          )
           assert(intake.vec_a.length == p.support_euclidean.get)
 
           // we add a(idx) and a(idx+1), output the result to a(idx)
@@ -1018,6 +1002,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
             output.vec_a(idx) := recFNFromFN(8, 24, input.euclidean_a(idx))
             output.vec_b(idx) := recFNFromFN(8, 24, input.euclidean_b(idx))
           }
+          // the two signals (vec_mask and vec_reset_accum) are Vec(1, XXX)
           output.vec_mask := input.euclidean_mask
           output.vec_reset_accum := input.euclidean_reset_accum
         } else println("datapath does not support euclidean!")

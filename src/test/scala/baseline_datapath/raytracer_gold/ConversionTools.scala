@@ -186,6 +186,7 @@ object RaytracerTestHelper {
     val vec_elements = sw_data.element_count.getOrElse(0)
     val vec_a = sw_data.vector_a
     val vec_b = sw_data.vector_b
+    val vec_mask = sw_data.vector_mask
     val reset_accum = sw_data.reset_accum
     assert(sw_box.length == 4)
     assert(vec_elements == vec_a.dim)
@@ -337,7 +338,7 @@ object RaytracerTestHelper {
           _.euclidean_reset_accum -> Vec.Lit(reset_accum.B),
 
           // assuming mask is always uniformly true
-          _.euclidean_mask -> Vec.Lit((0xffff).U(16.W))
+          _.euclidean_mask -> Vec.Lit(vec_mask.U(16.W))
         )
     }
     retval

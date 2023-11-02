@@ -220,7 +220,8 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
           None,
           empty_vec_a,
           empty_vec_b,
-          true
+          true,
+          0
         )
       }
     }
@@ -228,7 +229,17 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     // a sequence of software gold results
     val sw_result_seq: List[SW_RayBox_Result] = {
       ray_box_list.map {
-        case SW_EnhancedCombinedData(r, bseq, t, SW_OpQuadbox, _, _, _, _) => {
+        case SW_EnhancedCombinedData(
+              r,
+              bseq,
+              t,
+              SW_OpQuadbox,
+              _,
+              _,
+              _,
+              _,
+              _
+            ) => {
           // println("calculated a sw result")
           RaytracerGold.testIntersection(r, bseq)
         }
@@ -293,7 +304,8 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
             None,
             empty_vec_a,
             empty_vec_b,
-            true
+            true,
+            0
           )
         }
       }
@@ -301,7 +313,17 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       // a sequence of software gold results
       val sw_result_seq: List[SW_RayTriangle_Result] = {
         ray_triangle_list.map {
-          case SW_EnhancedCombinedData(r, _, t, SW_OpTriangle, _, _, _, _) => {
+          case SW_EnhancedCombinedData(
+                r,
+                _,
+                t,
+                SW_OpTriangle,
+                _,
+                _,
+                _,
+                _,
+                _
+              ) => {
             // println("calculated a sw result")
             RaytracerGold.testTriangleIntersection(r, t)
           }
@@ -458,7 +480,8 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
               Some(16),
               default_vec_a,
               default_vec_b,
-              true
+              true,
+              0
             )
         }
       }
@@ -466,7 +489,17 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       // a sequence of software gold results
       val sw_result_seq: List[SW_Unified_Result] = {
         combined_data_list.map {
-          case SW_EnhancedCombinedData(r, _, t, SW_OpTriangle, _, _, _, _) => {
+          case SW_EnhancedCombinedData(
+                r,
+                _,
+                t,
+                SW_OpTriangle,
+                _,
+                _,
+                _,
+                _,
+                _
+              ) => {
             // println("calculated a sw result")
             SW_Unified_Result(
               true,
@@ -474,7 +507,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
               SW_RayBox_Result()
             )
           }
-          case SW_EnhancedCombinedData(r, bs, _, SW_OpQuadbox, _, _, _, _) =>
+          case SW_EnhancedCombinedData(r, bs, _, SW_OpQuadbox, _, _, _, _, _) =>
             SW_Unified_Result(
               false,
               SW_RayTriangle_Result(),
