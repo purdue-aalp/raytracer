@@ -89,26 +89,29 @@ class ChainedSkidBufferStages extends Module {
 }
 
 object EmitVerilog extends App {
-  var shortest_length = Double.PositiveInfinity
-  var shortest_code = new String()
+  // var shortest_length = Double.PositiveInfinity
+  // var shortest_code = new String()
 
-  // for(expW <- 7 to 10; sigW <- 24 to 28){
-  //   val sv_code = ChiselStage.emitSystemVerilog(new Foo(outExp = expW, outSig = sigW))
-  //   val length = sv_code.length()
+  // // for(expW <- 7 to 10; sigW <- 24 to 28){
+  // //   val sv_code = ChiselStage.emitSystemVerilog(new Foo(outExp = expW, outSig = sigW))
+  // //   val length = sv_code.length()
 
-  //   println(s"expW=${expW}, sigW=${sigW}, length=${length}")
+  // //   println(s"expW=${expW}, sigW=${sigW}, length=${length}")
 
-  //   if(length < shortest_length){
-  //     println("shortest found!")
-  //     shortest_length = length.toDouble
-  //     shortest_code = sv_code
-  //   }
-  // }
+  // //   if(length < shortest_length){
+  // //     println("shortest found!")
+  // //     shortest_length = length.toDouble
+  // //     shortest_code = sv_code
+  // //   }
+  // // }
 
-  // print(shortest_code)
+  // // print(shortest_code)
 
-  // val sv_code = ChiselStage.emitSystemVerilog(new Bar(outExp = 9, outSig =
-  // 27))
-  val sv_code = ChiselStage.emitSystemVerilog(new ChainedSkidBufferStages)
+  // // val sv_code = ChiselStage.emitSystemVerilog(new Bar(outExp = 9, outSig =
+  // // 27))
+  // val sv_code = ChiselStage.emitSystemVerilog(new ChainedSkidBufferStages)
+
+  import playground._
+  val sv_code = ChiselStage.emitSystemVerilog(new Dataview_Try_Module)
   print(sv_code)
 }
