@@ -240,6 +240,29 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           }
         }
       }
+      is(UnifiedDatapathOpCode.OpAngular) {
+        if (p.support_euclidean.isDefined) {
+          assert(intake.vec_a.length == p.support_euclidean.get)
+          val angular_bundle = intake.getAngularJobBundleView()
+          val angular_element_count = angular_bundle._angular_element_count
+          assert(
+            angular_element_count == 8,
+            "currently only support 8 elements each in the candidate and query points"
+          )
+          val _dest = Seq(emit.vec_a.take(8), emit.vec_b.take(8)).flatten
+          val _src = Seq(
+            angular_bundle.angular_query.getElements,
+            angular_bundle.angular_candidate.getElements
+          ).flatten
+          val _sel =
+            angular_bundle.angular_mask.asBools :++ angular_bundle.angular_mask.asBools
+          assert(_dest.length == _src.length)
+          assert(_dest.length == _sel.length)
+          (_dest zip _src zip _sel).foreach { case ((_d, _s), _m) =>
+            _d := Mux(_m, _s, _zero_RecFN)
+          }
+        }
+      }
     }
 
     emit
@@ -247,7 +270,9 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
 
   // stage 4 performs 24 muls for ray-box to find out the time intersection
   // intervals, or 9 mul for ray-triangle to perform the multiplication step of shearing and scaling of
-  // triangle vertices, or 16 muls for euclidean to calculate the square of diffs
+  // triangle vertices, or 16 muls for euclidean to calculate the square of
+  // diffs, or 16 muls for angular to calculate the element-wise product between
+  // query point and candidate point, and the query point and itself.
   stage_functions(4) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
@@ -389,6 +414,40 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           }
         }
       }
+      is(UnifiedDatapathOpCode.OpAngular) {
+        if (p.support_euclidean.isDefined) {
+          assert(intake.vec_a.length == p.support_euclidean.get)
+          val angular_bundle = intake.getAngularJobBundleView()
+          val angular_element_count = angular_bundle._angular_element_count
+          assert(
+            angular_element_count == 8,
+            "currently only support 8 elements each in the candidate and query points"
+          )
+
+          // elements of query*candidate goes to vec_a, elements of
+          // candidate*candidate goes to vec_b
+          val _dest = Seq(
+            emit.vec_a.take(angular_element_count),
+            emit.vec_b.take(angular_element_count)
+          ).flatten
+          val _src1 = Seq(
+            angular_bundle.angular_query.getElements,
+            angular_bundle.angular_candidate.getElements
+          ).flatten
+          val _src2 = Seq(
+            angular_bundle.angular_candidate.getElements,
+            angular_bundle.angular_candidate.getElements
+          ).flatten
+
+          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+            case (((_1, _2), _3), fu) =>
+              fu.io.a := _1
+              fu.io.b := _2
+              _3 := fu.io.out
+            // TODO: handle exceptions!
+          }
+        }
+      }
     }
 
     emit
@@ -396,7 +455,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
 
   // stage 5 performs 6 adds for ray-triangle to perform the addition step of
   // shearing and scaling of triangle vertices, or 8 adds for euclidean to
-  // reduce the partial sums
+  // reduce the partial sums, or 8 adds for angular to reduce the partial sums
   stage_functions(5) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
@@ -481,6 +540,31 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           }
         }
       }
+      is(UnifiedDatapathOpCode.OpAngular) {
+        if (p.support_euclidean.isDefined) {
+          assert(intake.vec_a.length == p.support_euclidean.get)
+          val angular_bundle = intake.getAngularJobBundleView()
+          val _dest = Seq(
+            emit.vec_a.take(4),
+            emit.vec_b.take(4)
+          ).flatten
+          val _src1 = Seq(
+            angular_bundle.angular_query.take(4),
+            angular_bundle.angular_candidate.take(4)
+          ).flatten
+          val _src2 = Seq(
+            angular_bundle.angular_query.drop(4),
+            angular_bundle.angular_candidate.drop(4)
+          ).flatten
+          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+            case (((_1, _2), _3), fu) =>
+              fu.io.a := _1
+              fu.io.b := _2
+              _3 := fu.io.out
+              fu.io.subOp := false.B
+          }
+        }
+      }
     }
 
     emit
@@ -532,13 +616,15 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
         }
       }
       is(UnifiedDatapathOpCode.OpQuadbox) {}
+      is(UnifiedDatapathOpCode.OpEuclidean) {}
+      is(UnifiedDatapathOpCode.OpAngular) {}
     }
 
     emit
   })
 
   // stage 7 performs 3 adds for ray-triangle test to find the value of U, V, W,
-  // or 4 adds for euclidean
+  // or 4 adds for euclidean, or 4 adds for angular
   stage_functions(7) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
@@ -606,6 +692,32 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           }
         }
       }
+      is(UnifiedDatapathOpCode.OpAngular) {
+        if (p.support_euclidean.isDefined) {
+          assert(intake.vec_a.length == p.support_euclidean.get)
+          val angular_bundle = intake.getAngularJobBundleView()
+          val _dest = Seq(
+            emit.vec_a.take(2),
+            emit.vec_b.take(2)
+          ).flatten
+          val _src1 = Seq(
+            angular_bundle.angular_query.take(2),
+            angular_bundle.angular_candidate.take(2)
+          ).flatten
+          val _src2 = Seq(
+            angular_bundle.angular_query.drop(2),
+            angular_bundle.angular_candidate.drop(2)
+          ).flatten
+          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+            case (((_1, _2), _3), fu) =>
+              fu.io.a := _1
+              fu.io.b := _2
+              _3 := fu.io.out
+              fu.io.subOp := false.B
+          }
+        }
+      }
+
     }
 
     emit
@@ -645,13 +757,15 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
         }
       }
       is(UnifiedDatapathOpCode.OpQuadbox) {}
+      is(UnifiedDatapathOpCode.OpEuclidean) {}
+      is(UnifiedDatapathOpCode.OpAngular) {}
     }
 
     emit
   })
 
   // stage 9 does two adds for ray-triangle test to find out the partial sum for
-  // t_denom and t_num, or two adds for euclidean
+  // t_denom and t_num, or two adds for euclidean, or two adds for angular
   stage_functions(9) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
@@ -706,13 +820,42 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           }
         }
       }
+      is(UnifiedDatapathOpCode.OpAngular) {
+        if (p.support_euclidean.isDefined) {
+          // after this stage, the elements in this single beat of angular jobs
+          // should have been be fully reduced. The next stage will perform accumulation
+          assert(intake.vec_a.length == p.support_euclidean.get)
+          val angular_bundle = intake.getAngularJobBundleView()
+          val _dest = Seq(
+            emit.vec_a.take(1),
+            emit.vec_b.take(1)
+          ).flatten
+          val _src1 = Seq(
+            angular_bundle.angular_query.take(1),
+            angular_bundle.angular_candidate.take(1)
+          ).flatten
+          val _src2 = Seq(
+            angular_bundle.angular_query.drop(1),
+            angular_bundle.angular_candidate.drop(1)
+          ).flatten
+          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+            case (((_1, _2), _3), fu) =>
+              fu.io.a := _1
+              fu.io.b := _2
+              _3 := fu.io.out
+              fu.io.subOp := false.B
+          }
+        }
+      }
+
     }
 
     emit
   })
 
   // stage 10 performs two adds for ray-triangle test, to complete the summation
-  // of t_denom and t_num, or a single add for euclidean
+  // of t_denom and t_num, or a single add for euclidean, or two accumulations
+  // for angular
   stage_functions(10) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
@@ -764,6 +907,43 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
               fu.io.b := _2
               _3 := fu.io.out
               fu.io.subOp := false.B
+          }
+        }
+      }
+      is(UnifiedDatapathOpCode.OpAngular) {
+        if (p.support_euclidean.isDefined) {
+          assert(intake.vec_a.length == p.support_euclidean.get)
+          val dot_product_accumulator = RegInit(0.U.asTypeOf(intake.vec_a(0)))
+          val norm_accumulator = RegInit(0.U.asTypeOf(intake.vec_a(0)))
+
+          val angular_bundle = intake.getAngularJobBundleView()
+          val _dest = Seq(
+            emit.angular_dot_product_accum_val(0),
+            emit.angular_dot_product_accum_val(0)
+          )
+          val _src1 = Seq(dot_product_accumulator, norm_accumulator)
+          val _src2 = Seq(
+            angular_bundle.angular_query(0),
+            angular_bundle.angular_candidate(0)
+          )
+          assert(_dest.length <= fu_list.length)
+          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+            case (((_1, _2), _3), fu) =>
+              fu.io.a := _1
+              fu.io.b := _2
+              fu.io.subOp := false.B
+              _3 := fu.io.out
+
+            // handle exceptions!
+          }
+
+          // reset the accumulators if needed
+          when(angular_bundle.angular_reset_accum) {
+            dot_product_accumulator := 0.U
+            norm_accumulator := 0.U
+          }.otherwise {
+            dot_product_accumulator := emit.angular_dot_product_accum_val(0)
+            norm_accumulator := emit.angular_norm_accum_val(0)
           }
         }
       }
@@ -945,6 +1125,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           }
         }
       }
+      is(UnifiedDatapathOpCode.OpAngular) {}
     }
 
     emit
@@ -1039,6 +1220,20 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
             input.vec_accum_val(0)
           )
           output.euclidean_reset_accum(0) := input.vec_reset_accum(0)
+
+          // angular
+          output.angular_dot_product(0) := fNFromRecFN(
+            8,
+            24,
+            input.angular_dot_product_accum_val(0)
+          )
+          output.angular_norm(0) := fNFromRecFN(
+            8,
+            24,
+            input.angular_norm_accum_val(0)
+          )
+          val angular_bundle = input.getAngularJobBundleView()
+          output.angular_reset_accum(0) := angular_bundle.angular_reset_accum
         }
         output
       }

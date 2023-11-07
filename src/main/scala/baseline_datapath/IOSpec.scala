@@ -13,6 +13,10 @@ object UnifiedDatapathOpCode extends ChiselEnum {
   /// Calculate the sum-of-squares of the element-wise difference bewteen two
   /// FP32 vectors
   val OpEuclidean = Value
+
+  /// Calculate the dot product between a query point and a candidate point, and
+  /// the squared magnitude of the candidate point.
+  val OpAngular = Value
 }
 
 class Float3(recorded_float: Boolean = false) extends Bundle {
@@ -156,6 +160,12 @@ class EnhancedOutputBundle(
   val euclidean_accumulator =
     Vec(if (_element_count > 0) 1 else 0, Bits(_bit_width))
   val euclidean_reset_accum = Vec(if (_element_count > 0) 1 else 0, Bool())
+
+  // angular
+  val angular_dot_product =
+    Vec(if (_element_count > 0) 1 else 0, Bits(_bit_width))
+  val angular_norm = Vec(if (_element_count > 0) 1 else 0, Bits(_bit_width))
+  val angular_reset_accum = Vec(if (_element_count > 0) 1 else 0, Bool())
 }
 
 // Nothing more than this bundle needs to be passed between pipeline stages of
@@ -205,16 +215,26 @@ class ExtendedPipelineBundle(private val p: RaytracerParams)
   val vec_reset_accum = Vec(if (_elaborate_euclidean) 1 else 0, Bool())
   val vec_accum_val = Vec(if (_elaborate_euclidean) 1 else 0, Bits(_bit_width))
 
-  val angular_dot_product_accum_val = Vec(if(_elaborate_euclidean) 1 else 0, Bits(_bit_width))
-  val angular_norm_accum_val = Vec(if(_elaborate_euclidean) 1 else 0, Bits(_bit_width))
+  // For angular distance calculation.
+  // The query point, candidate point, reset signal and mask are multiplexed with the wires
+  // for vec_a, vec_b, vec_reset_accum and vec_mask.
+  val angular_dot_product_accum_val =
+    Vec(if (_elaborate_euclidean) 1 else 0, Bits(_bit_width))
+  val angular_norm_accum_val =
+    Vec(if (_elaborate_euclidean) 1 else 0, Bits(_bit_width))
 
   def getAngularJobBundleView(): AngularJobBundle = {
-    assert(_elaborate_euclidean, "AngularJobPipelineBundle must depend on Euclidean job support")
+    assert(
+      _elaborate_euclidean,
+      "AngularJobPipelineBundle must depend on Euclidean job support"
+    )
     val angular_bundle_wire = Wire(new AngularJobBundle(p))
-    for(idx <- 0 until _element_count/2){
+    for (idx <- 0 until _element_count / 2) {
       angular_bundle_wire.angular_query(idx) := vec_a(idx)
       angular_bundle_wire.angular_candidate(idx) := vec_b(idx)
     }
+    angular_bundle_wire.angular_mask := vec_mask(0)
+    angular_bundle_wire.angular_reset_accum := vec_reset_accum(0)
 
     angular_bundle_wire
   }
@@ -225,17 +245,22 @@ class ExtendedPipelineBundle(private val p: RaytracerParams)
 /// requires twice as many Fmul and Fadd units Euclidean jobs require. Since we
 /// would like to integrate both Angular and Euclidean features into the same
 /// raytracer pipeline, we allow Angular jobs to process vectors that are only
-/// half as long as those would be processed by Euclidean jobs. 
+/// half as long as those would be processed by Euclidean jobs.
 class AngularJobBundle(
-  private val p: RaytracerParams
-) extends Bundle{
-  assert(p.support_euclidean.isDefined, "The AngularJobBundle cannot exist without Euclidean support")
+    private val p: RaytracerParams
+) extends Bundle {
+  assert(
+    p.support_euclidean.isDefined,
+    "The AngularJobBundle cannot exist without Euclidean support"
+  )
 
-  val _angular_element_count: Int = (p.support_euclidean.get)/2 
+  val _angular_element_count: Int = (p.support_euclidean.get) / 2
   val _bit_width = if (p.internal_recorded_float) 33.W else 32.W
 
   val angular_query = Vec(_angular_element_count, Bits(_bit_width))
   val angular_candidate = Vec(_angular_element_count, Bits(_bit_width))
+  val angular_mask = Bits(_angular_element_count.W)
+  val angular_reset_accum = Bool()
 }
 
 // Conversion circuits between 32-bit IEEE float and 33-bit recorded float
