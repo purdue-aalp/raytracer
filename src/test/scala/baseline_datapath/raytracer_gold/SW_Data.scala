@@ -7,6 +7,7 @@ object SW_Opcode extends Enumeration {
   val SW_OpTriangle = Value(0)
   val SW_OpQuadbox = Value(1)
   val SW_OpEuclidean = Value(2)
+  val SW_OpAngular = Value(3)
 }
 
 import SW_Opcode._
@@ -137,6 +138,20 @@ class SW_Vector(val elements: Seq[Float]) {
       }
       .reduce(_ + _)
   }
+
+  def calc_dot_product(other: SW_Vector): Float = {
+    assert(other.dim == dim)
+    elements
+      .zip(other.get_elements())
+      .map { case (a, b) =>
+        a * b
+      }
+      .reduce(_ + _)
+  }
+
+  def get_norm(): Float = {
+    calc_dot_product(this)
+  }
 }
 
 object SW_Vector {
@@ -240,6 +255,45 @@ object get_euclidean_job_seq_from_vec_pair {
           SW_Vector(vec_b_first_beat.padTo(16, 0.0f)),
           last_beat,
           generate_mask(vec_length)
+        )
+        one_job +: job_seq((vec_a_remaining, vec_b_remaining))
+    }
+
+    job_seq((vec_a.get_elements(), vec_b.get_elements()))
+
+  }
+}
+
+object get_angular_job_seq_from_vec_pair{
+  def apply(
+      vec_a: SW_Vector,
+      vec_b: SW_Vector
+  ): Seq[SW_EnhancedCombinedData] = {
+    assert(vec_b.dim == vec_a.dim)
+    import scala.math._
+    val beats: Int = (vec_a.dim / 8.0f).ceil.toInt
+
+    // a recursive way to convert arbitrarily long vectors into a seq of SW_EnhancedCombinedData
+    def job_seq(
+        vec_pair: (Seq[Float], Seq[Float])
+    ): Seq[SW_EnhancedCombinedData] = vec_pair match {
+      case (Nil, Nil) => Nil
+      case _ =>
+        val (vec_a_first_beat, vec_a_remaining) = vec_pair._1.splitAt(8)
+        val (vec_b_first_beat, vec_b_remaining) = vec_pair._2.splitAt(8)
+        val last_beat = if (vec_pair._1.length <= 8) true else false
+        val vec_length = vec_a_first_beat.length
+
+        val one_job = SW_EnhancedCombinedData(
+          SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(1.0f, 1.0f, 1.0f)),
+          Seq.fill(4)(SW_Box()),
+          SW_Triangle(),
+          SW_OpAngular,
+          Some(16),
+          SW_Vector(vec_a_first_beat.padTo(16, 0.0f)),
+          SW_Vector(vec_b_first_beat.padTo(16, 0.0f)),
+          last_beat,
+          get_euclidean_job_seq_from_vec_pair.generate_mask(vec_length)
         )
         one_job +: job_seq((vec_a_remaining, vec_b_remaining))
     }

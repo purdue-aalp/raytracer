@@ -73,6 +73,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   val test_ray_box_random = false
   val test_ray_triangle_random = false
   val test_euclidean_random = true
+  val test_angular_random = true
   val test_unified_random = false
 
   val default_vec_a = SW_Vector((0 until 16).toList.map(_.toFloat))
@@ -458,6 +459,89 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       }
   }
 
+  def testAngular(
+      description: String,
+      seq_vec_a: Seq[SW_Vector],
+      seq_vec_b: Seq[SW_Vector]
+  ): Unit = description in {
+    val combined_data_list: List[SW_EnhancedCombinedData] = List.from {
+      (seq_vec_a zip seq_vec_b).flatMap { case (a, b) =>
+        get_angular_job_seq_from_vec_pair(a, b)
+      }
+    }
+
+    val result_list = (seq_vec_a zip seq_vec_b).map { case (query, candidate) =>
+      Map(
+        "dot_product" -> query.calc_dot_product(candidate),
+        "norm" -> candidate.get_norm()
+      )
+    }
+
+    combined_data_list.foreach(x=>
+      println(s"sw job is ${x}")
+    )
+   
+
+    var worst_normalized_diff = 0.0f
+
+    test(new UnifiedDatapath_wrapper_16)
+      .withAnnotations(
+        chisel_test_annotations :++ {
+          if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }
+          else { Nil }
+        }
+        // chisel_test_annotations
+      )
+      .withChiselAnnotations(
+        chisel_test_chisel_annotations
+      ) { dut =>
+        dut.in.initSource().setSourceClock(dut.clock)
+        dut.out.initSink().setSinkClock(dut.clock)
+
+        fork {
+          dut.in.enqueueSeq(combined_data_list)
+        }.fork {
+          dut.out.ready.poke(true.B)
+          result_list.zipWithIndex.foreach { case (sw_result, idx) =>
+            dut.out.waitForValid()
+
+            // only inspect the hw output on the last beat, i.e. those that
+            // asserts the reset_accum signal
+            while (!dut.out.bits.angular_reset_accum.peek()(0).litToBoolean) {
+              dut.clock.step()
+              dut.out.waitForValid()
+            }
+
+            println(s"${idx}: sw_result: ${sw_result}, hardware result (dot_product): ${bitsToFloat(dut.out.bits.angular_dot_product(0).peek())}, (norm): ${bitsToFloat(dut.out.bits.angular_norm(0).peek())}")
+            // assert(sw_sum ==
+            // bitsToFloat(dut.out.bits.euclidean_accumulator(0).peek()))
+            val normalized_diff_dot_product = abs(
+              sw_result("dot_product") - bitsToFloat(
+                dut.out.bits.angular_dot_product(0).peek()
+              )
+            ) / sw_result("dot_product")
+            val normalized_diff_norm= abs(
+              sw_result("norm") - bitsToFloat(
+                dut.out.bits.angular_norm(0).peek()
+              )
+            ) / sw_result("norm")            
+            if (normalized_diff_dot_product > worst_normalized_diff)
+              worst_normalized_diff = normalized_diff_dot_product
+            if (normalized_diff_norm > worst_normalized_diff)
+              worst_normalized_diff = normalized_diff_norm
+
+            dut.clock.step()
+          }
+        }.join()
+
+        println(s"worse normalzied diff is ${worst_normalized_diff}")
+        if (PRINT_END_TIME) {
+          println(s"test ends at time ${dut.clock.getStepCount}")
+        }
+      }
+  }
+
+
   def testUnifiedIntersection(
       description: String,
       ray_seq: Seq[SW_Ray],
@@ -799,7 +883,18 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
   if (test_euclidean_random) {
     testEuclidean(
-      s"test 16-element euclidean for ${N_RANDOM_TEST} inputs",
+      s"test random euclidean for ${N_RANDOM_TEST} inputs",
+      vec_a,
+      vec_b
+    )
+    // testEuclidean("test 16 element euclidean",
+    // Seq(default_vec_a), Seq(default_vec_b)
+    // )
+  }
+
+  if (test_angular_random) {
+    testAngular(
+      s"test random angular for ${N_RANDOM_TEST} inputs",
       vec_a,
       vec_b
     )

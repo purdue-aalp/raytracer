@@ -919,7 +919,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val angular_bundle = intake.getAngularJobBundleView()
           val _dest = Seq(
             emit.angular_dot_product_accum_val(0),
-            emit.angular_dot_product_accum_val(0)
+            emit.angular_norm_accum_val(0)
           )
           val _src1 = Seq(dot_product_accumulator, norm_accumulator)
           val _src2 = Seq(
