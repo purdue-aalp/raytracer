@@ -483,8 +483,6 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       )
     }
 
-    combined_data_list.foreach(x => println(s"sw job is ${x}"))
-
     var worst_normalized_diff = 0.0f
 
     test(new UnifiedDatapath_wrapper_16)
