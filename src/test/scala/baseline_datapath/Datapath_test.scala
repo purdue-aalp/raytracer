@@ -52,6 +52,12 @@ class UnifiedDatapath_wrapper_16
     extends UnifiedDatapath(p = RaytracerParams(false, true, Some(16))) {
   import hardfloat._
   val exposed_time = expose(_time)
+  // val exposed_stage_10_accum = expose(stage_10_norm_accum)
+  // val exposed_stage_9_norm = expose(stage_9_norm_sum)
+  // val exposed_stage_4_vec_b = expose(stage_4_vec_b)
+  // val exposed_stage_5_vec_b = expose(stage_5_vec_b)
+  // val exposed_stage_6_vec_b = expose(stage_6_vec_b)
+  // val exposed_stage_7_vec_b = expose(stage_7_vec_b)
 }
 
 class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
@@ -61,20 +67,20 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   type HW_Box = baseline_datapath.AABB
 
   val r = new Random()
-  val N_RANDOM_TEST = 10
+  val N_RANDOM_TEST = 1000
   val PRINT_END_TIME = true
   val float_tolerance_error =
     0.001 // normalized error: 149 vs 100 would have an error of 0.49
   val use_stage_submodule = false
   val dump_vcd_for_unified_test = false
 
-  val test_ray_box_specific = false
-  val test_ray_triangle_specific = false
-  val test_ray_box_random = false
-  val test_ray_triangle_random = false
+  val test_ray_box_specific = true
+  val test_ray_triangle_specific = true
+  val test_ray_box_random = true
+  val test_ray_triangle_random = true
   val test_euclidean_random = true
   val test_angular_random = true
-  val test_unified_random = false
+  val test_unified_random = true
 
   val default_vec_a = SW_Vector((0 until 16).toList.map(_.toFloat))
   val default_vec_b = SW_Vector((16 until 0 by -1).toList.map(_.toFloat))
@@ -93,7 +99,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     // WriteVcdAnnotation,
     VerilatorCFlags(Seq("-Os", "-march=native")),
     VerilatorLinkFlags(Seq("-Os", "-march=native")),
-    VerilatorFlags(Seq("-O3", "--threads", "16"))
+    VerilatorFlags(Seq("-O3", "--threads", "4"))
   )
   val chisel_test_chisel_annotations = Seq(
     ThrowOnFirstErrorAnnotation,
@@ -477,10 +483,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       )
     }
 
-    combined_data_list.foreach(x=>
-      println(s"sw job is ${x}")
-    )
-   
+    combined_data_list.foreach(x => println(s"sw job is ${x}"))
 
     var worst_normalized_diff = 0.0f
 
@@ -512,7 +515,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
               dut.out.waitForValid()
             }
 
-            println(s"${idx}: sw_result: ${sw_result}, hardware result (dot_product): ${bitsToFloat(dut.out.bits.angular_dot_product(0).peek())}, (norm): ${bitsToFloat(dut.out.bits.angular_norm(0).peek())}")
+            // println(s"${idx}: sw_result: ${sw_result}, hardware result (dot_product): ${bitsToFloat(dut.out.bits.angular_dot_product(0).peek())}, (norm): ${bitsToFloat(dut.out.bits.angular_norm(0).peek())}")
             // assert(sw_sum ==
             // bitsToFloat(dut.out.bits.euclidean_accumulator(0).peek()))
             val normalized_diff_dot_product = abs(
@@ -520,11 +523,11 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
                 dut.out.bits.angular_dot_product(0).peek()
               )
             ) / sw_result("dot_product")
-            val normalized_diff_norm= abs(
+            val normalized_diff_norm = abs(
               sw_result("norm") - bitsToFloat(
                 dut.out.bits.angular_norm(0).peek()
               )
-            ) / sw_result("norm")            
+            ) / sw_result("norm")
             if (normalized_diff_dot_product > worst_normalized_diff)
               worst_normalized_diff = normalized_diff_dot_product
             if (normalized_diff_norm > worst_normalized_diff)
@@ -540,7 +543,6 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
         }
       }
   }
-
 
   def testUnifiedIntersection(
       description: String,

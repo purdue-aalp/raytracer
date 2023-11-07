@@ -264,7 +264,7 @@ object get_euclidean_job_seq_from_vec_pair {
   }
 }
 
-object get_angular_job_seq_from_vec_pair{
+object get_angular_job_seq_from_vec_pair {
   def apply(
       vec_a: SW_Vector,
       vec_b: SW_Vector

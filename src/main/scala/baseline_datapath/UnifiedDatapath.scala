@@ -553,9 +553,11 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
             angular_bundle.angular_candidate.take(4)
           ).flatten
           val _src2 = Seq(
-            angular_bundle.angular_query.drop(4),
-            angular_bundle.angular_candidate.drop(4)
+            angular_bundle.angular_query.slice(4, 8),
+            angular_bundle.angular_candidate.slice(4, 8)
           ).flatten
+          assert(_dest.length == _src1.length)
+          assert(_dest.length == _src2.length)
           (_src1 zip _src2 zip _dest zip fu_list).foreach {
             case (((_1, _2), _3), fu) =>
               fu.io.a := _1
@@ -705,15 +707,19 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
             angular_bundle.angular_candidate.take(2)
           ).flatten
           val _src2 = Seq(
-            angular_bundle.angular_query.drop(2),
-            angular_bundle.angular_candidate.drop(2)
+            angular_bundle.angular_query.slice(2, 4),
+            angular_bundle.angular_candidate.slice(2, 4)
           ).flatten
+          assert(_dest.length == _src1.length)
+          assert(_dest.length == _src2.length)
           (_src1 zip _src2 zip _dest zip fu_list).foreach {
             case (((_1, _2), _3), fu) =>
               fu.io.a := _1
               fu.io.b := _2
               _3 := fu.io.out
               fu.io.subOp := false.B
+            // printf(cf"stage 7 adder a: ${fNFromRecFN(8, 24, fu.io.a)},b: ${fNFromRecFN(8, 24, fu.io.b)},out: ${fNFromRecFN(8, 24, fu.io.out)}\n")
+
           }
         }
       }
@@ -835,9 +841,11 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
             angular_bundle.angular_candidate.take(1)
           ).flatten
           val _src2 = Seq(
-            angular_bundle.angular_query.drop(1),
-            angular_bundle.angular_candidate.drop(1)
+            angular_bundle.angular_query.slice(1, 2),
+            angular_bundle.angular_candidate.slice(1, 2)
           ).flatten
+          assert(_dest.length == _src1.length)
+          assert(_dest.length == _src2.length)
           (_src1 zip _src2 zip _dest zip fu_list).foreach {
             case (((_1, _2), _3), fu) =>
               fu.io.a := _1
@@ -1161,6 +1169,19 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     s.emit
   }
   _last_stage_emit_port.ready := true.B
+
+  // val stage_4_vec_b = Wire(Vec(16, Bits(32.W)))
+  // val stage_5_vec_b = Wire(Vec(16, Bits(32.W)))
+  // val stage_6_vec_b = Wire(Vec(16, Bits(32.W)))
+  // val stage_7_vec_b = Wire(Vec(16, Bits(32.W)))
+  // for(idx<- 0 until 16){
+  //   stage_4_vec_b(idx) := fNFromRecFN(8, 24, stage_modules(4).emit.bits.vec_b(idx))
+  //   stage_5_vec_b(idx) := fNFromRecFN(8, 24, stage_modules(5).emit.bits.vec_b(idx))
+  //   stage_6_vec_b(idx) := fNFromRecFN(8, 24, stage_modules(6).emit.bits.vec_b(idx))
+  //   stage_7_vec_b(idx) := fNFromRecFN(8, 24, stage_modules(7).emit.bits.vec_b(idx))
+  // }
+  // val stage_10_norm_accum = fNFromRecFN(8, 24, stage_modules(10).emit.bits.angular_norm_accum_val(0))
+  // val stage_9_norm_sum = fNFromRecFN(8, 24, stage_modules(9).emit.bits.vec_b(0))
 
   // now that all stages are chained up, overwrite the first few stages
   // stage 1 is deprecated, since we have skid buffers now
