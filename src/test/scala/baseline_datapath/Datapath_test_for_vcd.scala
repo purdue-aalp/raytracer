@@ -31,65 +31,36 @@ import chiseltest.simulator.{
 // SW opcode is an enumeration defined in SW_Data.scala
 import SW_Opcode._
 
-class Datapath_wrapper extends Datapath {
-  import hardfloat._
-  val exposed_time = expose(_time)
-  // val exposed_tmin = expose(fNFromRecFN(8, 24, tmin))
-  // val exposed_tmax = expose(fNFromRecFN(8, 24, tmax))
-  // val exposed_aabb_3 = expose(AABBConvertRecFNtoFN(geometries_shift_reg(3).aabb))
-  // val exposed_ray_2 = expose(RayConvertRecFNtoFN(geometries_shift_reg(2).ray))
-  // val exposed_adder_exception_0 = expose(adder_exceptions(0))
-  // val exposed_tmin_3d = expose(Float3ConvertRecFNtoFN(tmin_3d))
-  // val exposed_tmax_3d = expose(Float3ConvertRecFNtoFN(tmax_3d))
-}
-
-trait WithExposedTime extends Module{
-  def exposed_time: Bits
-}
-
-class UnifiedDatapath_wrapper
-    extends UnifiedDatapath(p = RaytracerParams(false, true, None)) with WithExposedTime {
-  val exposed_time = expose(_time)
-}
-
-class UnifiedDatapath_wrapper_16
-    extends UnifiedDatapath(p = RaytracerParams(false, true, Some(16))) with WithExposedTime {
-  import hardfloat._
-  val exposed_time = expose(_time)
-  // val exposed_stage_10_accum = expose(stage_10_norm_accum)
-  // val exposed_stage_9_norm = expose(stage_9_norm_sum)
-  // val exposed_stage_4_vec_b = expose(stage_4_vec_b)
-  // val exposed_stage_5_vec_b = expose(stage_5_vec_b)
-  // val exposed_stage_6_vec_b = expose(stage_6_vec_b)
-  // val exposed_stage_7_vec_b = expose(stage_7_vec_b)
-}
-
-class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
+class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
 
   // we are dealing with hardware and software Ray types
   type HW_Ray = baseline_datapath.Ray
   type HW_Box = baseline_datapath.AABB
 
   val r = new Random()
-  val N_RANDOM_TEST = 10000
+  val N_RANDOM_TEST = 30
   val PRINT_END_TIME = true
   val float_tolerance_error =
     0.001 // normalized error: 149 vs 100 would have an error of 0.49
   val use_stage_submodule = false
   val dump_vcd_for_unified_test = false
 
-  val test_ray_box_specific = true
-  val test_ray_triangle_specific = true
-  val test_ray_box_random = true
-  val test_ray_triangle_random = true
-  val test_euclidean_random = true
-  val test_angular_random = true
-  val test_unified_random = true
+  val test_baseline_ray_box_random = true
+  val test_baseline_ray_triangle_random = true
+  val test_extended_euclidean_random = true
+  val test_extended_angular_random = true
+  val test_extended_ray_box_random = true
+  val test_extended_ray_triangle_random = true
 
   val default_vec_a = SW_Vector((0 until 16).toList.map(_.toFloat))
   val default_vec_b = SW_Vector((16 until 0 by -1).toList.map(_.toFloat))
   val empty_vec_a = SW_Vector(Nil)
   val empty_vec_b = SW_Vector(Nil)
+
+  def gen_baseline_or_extended_datapath(extended: Boolean) = extended match {
+    case true => new UnifiedDatapath_wrapper_16
+    case false => new UnifiedDatapath_wrapper
+  }
 
   val chisel_test_annotations = Seq(
     VerilatorBackendAnnotation,
@@ -216,6 +187,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
   // Define a function for ray-box intersection testing
   def testRayBoxIntersection(
+      extended: Boolean,
       description: String,
       box_seq_seq: Seq[Seq[SW_Box]],
       ray_seq: Seq[SW_Ray]
@@ -259,7 +231,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     }
 
     description in {
-      test(new UnifiedDatapath_wrapper)
+      test(gen_baseline_or_extended_datapath((extended)))
         .withAnnotations(
           chisel_test_annotations
         )
@@ -299,6 +271,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   }
 
   def testRayTriangleIntersection(
+    extended: Boolean,
       description: String,
       triangle_seq: Seq[SW_Triangle],
       ray_seq: Seq[SW_Ray]
@@ -344,7 +317,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
       var worst_normalized_error = 0.0f
 
-      test(new UnifiedDatapath_wrapper)
+      test(gen_baseline_or_extended_datapath((extended)))
         .withAnnotations(
           chisel_test_annotations
         )
@@ -547,6 +520,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   }
 
   def testUnifiedIntersection(
+    extended: Boolean,
       description: String,
       ray_seq: Seq[SW_Ray],
       box_seq_seq: Seq[Seq[SW_Box]],
@@ -604,7 +578,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
       var worst_normalized_error = 0.0f
 
-      test(new UnifiedDatapath_wrapper_16)
+      test(gen_baseline_or_extended_datapath(extended))
         .withAnnotations(
           chisel_test_annotations :++ {
             if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }
@@ -643,191 +617,6 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     }
   }
 
-  // Define test cases
-  if (test_ray_box_specific) {
-    testRayBoxIntersection(
-      "Small Ray inside box",
-      (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
-        1.0f) :: SW_Box() :: SW_Box() :: SW_Box() :: Nil) :: Nil,
-      new SW_Ray(
-        float_3(0.5f, -0.5f, 0.5f),
-        float_3(0.0001f, -0.0001f, -0.001f)
-      ) :: Nil
-    )
-    testRayBoxIntersection(
-      "Ray outside box pointing away",
-      (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
-        1.0f) :: SW_Box() :: SW_Box() :: SW_Box() :: Nil) :: Nil,
-      new SW_Ray(float_3(2.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
-    )
-    testRayBoxIntersection(
-      "Ray on edge of box pointing away",
-      (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
-        1.0f) :: SW_Box() :: SW_Box() :: SW_Box() :: Nil) :: Nil,
-      new SW_Ray(float_3(1.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
-    )
-    testRayBoxIntersection(
-      "Ray on corner of box pointing away",
-      (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
-        1.0f) :: SW_Box() :: SW_Box() :: SW_Box() :: Nil) :: Nil,
-      new SW_Ray(float_3(1.0f, 1.0f, 1.0f), float_3(1.0f, 1.0f, 1.0f)) :: Nil
-    )
-    testRayBoxIntersection(
-      "Ray on corner of box pointing along edge",
-      (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
-        1.0f) :: SW_Box() :: SW_Box() :: SW_Box() :: Nil) :: Nil,
-      new SW_Ray(float_3(1.0f, 1.0f, 1.0f), float_3(0.0f, -1.0f, 0.0f)) :: Nil
-    )
-    testRayBoxIntersection(
-      "Ray outside box pointing towards box",
-      (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
-        1.0f) :: SW_Box() :: SW_Box() :: SW_Box() :: Nil) :: Nil,
-      new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(1.0f, 0.0f, 0.0f)) :: Nil
-    )
-    testRayBoxIntersection(
-      "Ray hits node 1 then node 2",
-      (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) ::
-        SW_Box(2.0f, 2.5f, -0.5f, 0.5f, -0.5f,
-          0.5f) :: SW_Box() :: SW_Box() :: Nil) :: Nil,
-      new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(10.0f, 0.0f, 0.0f)) :: Nil
-    )
-
-    testRayBoxIntersection(
-      "Ray hits node 4 then 1 then 2 then misses 3",
-      (SW_Box(2.0f, 2.5f, -0.5f, 0.5f, -0.5f, 0.5f) ::
-        SW_Box(100.0f, 100.25f, -0.5f, 0.5f, -0.5f, 0.5f) ::
-        SW_Box(-5.0f, -4.0f, -0.5f, 0.5f, -0.5f, 0.5f) ::
-        SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) ::
-        Nil) :: Nil,
-      new SW_Ray(float_3(-2.0f, 0.0f, 0.0f), float_3(10.0f, 0.0f, 0.0f)) :: Nil
-    )
-
-    testRayBoxIntersection(
-      "Ray outside box pointing along edge",
-      (SW_Box(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
-        1.0f) :: SW_Box() :: SW_Box() :: SW_Box() :: Nil) :: Nil,
-      new SW_Ray(float_3(1.0f, 2.0f, 1.0f), float_3(0.0f, -1.0f, 0.0f)) :: Nil
-    )
-  }
-
-  if (test_ray_triangle_specific) {
-    testRayTriangleIntersection(
-      "Ray hits back of triangle along normal to surface",
-      SW_Triangle(
-        float_3(-1.0f, -1.0f, -1.0f),
-        float_3(0.0f, 1.0f, -1.0f),
-        float_3(1.0f, -1.0f, -1.0f)
-      ) :: Nil,
-      new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
-    )
-
-    testRayTriangleIntersection(
-      "Ray hits front of triangle along normal to surface",
-      SW_Triangle(
-        float_3(1.0f, -1.0f, -1.0f),
-        float_3(0.0f, 1.0f, -1.0f),
-        float_3(-1.0f, -1.0f, -1.0f)
-      ) :: Nil,
-      new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -1.0f)) :: Nil
-    )
-
-    testRayTriangleIntersection(
-      "Ray hits front edge of triangle along normal to surface",
-      SW_Triangle(
-        float_3(1.0f, -1.0f, -1.0f),
-        float_3(0.0f, 1.0f, -1.0f),
-        float_3(0.0f, -1.0f, -1.0f)
-      ) :: Nil,
-      new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
-    )
-
-    testRayTriangleIntersection(
-      "Ray hits front corner of triangle along normal to surface",
-      SW_Triangle(
-        float_3(1.0f, -1.0f, -1.0f),
-        float_3(0.0f, 0.0f, -1.0f),
-        float_3(0.0f, -1.0f, -1.0f)
-      ) :: Nil,
-      new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
-    )
-
-    testRayTriangleIntersection(
-      "Ray misses triangle",
-      SW_Triangle(
-        float_3(1.0f, -1.0f, -1.0f),
-        float_3(0.0f, 1.0f, -1.0f),
-        float_3(-1.0f, -1.0f, -1.0f)
-      ) :: Nil,
-      new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, 5.0f)) :: Nil
-    )
-
-    testRayTriangleIntersection(
-      "Ray misses triangle along normal to surface",
-      SW_Triangle(
-        float_3(1.0f, -1.0f, -1.0f),
-        float_3(0.0f, 1.0f, -1.0f),
-        float_3(-1.0f, -1.0f, -1.0f)
-      ) :: Nil,
-      new SW_Ray(float_3(-5.0f, 5.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
-    )
-
-    testRayTriangleIntersection(
-      "Ray hits front of triangle along normal to surface (further away)",
-      SW_Triangle(
-        float_3(1.0f, -1.0f, -100.0f),
-        float_3(0.0f, 1.0f, -100.0f),
-        float_3(-1.0f, -1.0f, -100.0f)
-      ) :: Nil,
-      new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
-    )
-
-    testRayTriangleIntersection(
-      "Ray hits front of triangle not along normal",
-      SW_Triangle(
-        float_3(1.0f, -1.0f, -3.0f),
-        float_3(0.0f, 1.0f, -1.0f),
-        float_3(-1.0f, -1.0f, -2.0f)
-      ) :: Nil,
-      new SW_Ray(float_3(0.0f, 0.0f, 0.0f), float_3(0.0f, 0.0f, -5.0f)) :: Nil
-    )
-
-    testRayTriangleIntersection(
-      "Ray hits edge of triangle perpendicular to normal",
-      SW_Triangle(
-        float_3(1.0f, -1.0f, -1.0f),
-        float_3(0.0f, 1.0f, -1.0f),
-        float_3(-1.0f, -1.0f, -1.0f)
-      ) :: Nil,
-      new SW_Ray(float_3(0.0f, -2.0f, -1.0f), float_3(0.0f, 5.0f, 0.0f)) :: Nil
-    )
-
-    testRayTriangleIntersection(
-      "Ray hits triangle (normal on x-axis)",
-      SW_Triangle(
-        float_3(1.0f, -1.0f, 1.0f),
-        float_3(1.0f, 1.0f, 0.0f),
-        float_3(1.0f, -1.0f, -1.0f)
-      ) :: Nil,
-      new SW_Ray(
-        float_3(-100.0f, 0.0f, 0.0f),
-        float_3(0.25f, 0.0f, 0.0f)
-      ) :: Nil
-    )
-
-    testRayTriangleIntersection(
-      "Ray hits edge of triangle perpendicular to normal from inside tri",
-      SW_Triangle(
-        float_3(1.0f, -1.0f, -1.0f),
-        float_3(0.0f, 1.0f, -1.0f),
-        float_3(-1.0f, -1.0f, -1.0f)
-      ) :: Nil,
-      new SW_Ray(
-        float_3(0.0f, -1.0f / 3, -1.0f),
-        float_3(0.0f, 5.0f, 0.0f)
-      ) :: Nil
-    )
-  }
-
   // randomized tests
   val box_seq_for_raybox = List.fill(N_RANDOM_TEST) {
     List.fill(4) { RandomSWData.genRandomBox(1e16.toFloat) }
@@ -836,11 +625,16 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     RandomSWData.genRandomRay(1e5.toFloat)
   }
 
-  if (test_ray_box_random) {
-    testRayBoxIntersection(
+  if (test_baseline_ray_box_random) {
+    testUnifiedIntersection(
+      false,
       s"${N_RANDOM_TEST} randomized rays and boxes within range -10000.0, 10000.0",
+      ray_seq_for_raybox,
       box_seq_for_raybox,
-      ray_seq_for_raybox
+      Seq.fill(ray_seq_for_raybox.length)(
+        SW_Triangle()
+      ),
+      Seq.fill(ray_seq_for_raybox.length)(SW_OpQuadbox) 
     )
   }
 
@@ -855,25 +649,42 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     )
   }
 
-  if (test_ray_triangle_random) {
-    testRayTriangleIntersection(
+  if (test_baseline_ray_triangle_random) {
+    testUnifiedIntersection(
+      false,
       s"${N_RANDOM_TEST} randomized rays and triangles within range ${SCENE_BOUNDS}",
+      ray_seq_for_raytriangle,
+      Seq.fill(ray_seq_for_raytriangle.length)(
+        Seq.fill(4)(SW_Box())
+      ),
       tri_seq_for_raytriangle,
-      ray_seq_for_raytriangle
+      Seq.fill(ray_seq_for_raybox.length)(SW_OpTriangle) 
     )
   }
 
-  if (test_unified_random) {
+  if (test_extended_ray_box_random) {
     testUnifiedIntersection(
-      "unified intersection test",
-      ray_seq_for_raybox :++ ray_seq_for_raytriangle,
-      box_seq_for_raybox :++ Seq.fill(ray_seq_for_raytriangle.length)(
-        Seq.fill(4)(SW_Box())
-      ),
+      true,
+      "extended ray box random test",
+      ray_seq_for_raybox,
+      box_seq_for_raybox,
       Seq.fill(ray_seq_for_raybox.length)(
         SW_Triangle()
-      ) :++ tri_seq_for_raytriangle,
-      Seq.fill(ray_seq_for_raybox.length)(SW_OpQuadbox) :++ Seq.fill(
+      ),
+      Seq.fill(ray_seq_for_raybox.length)(SW_OpQuadbox) 
+    )
+  }
+
+  if(test_extended_ray_triangle_random){
+    testUnifiedIntersection(
+      true,
+      "extended ray triangle random test",
+      ray_seq_for_raytriangle,
+      Seq.fill(ray_seq_for_raytriangle.length)(
+        Seq.fill(4)(SW_Box())
+      ),
+      tri_seq_for_raytriangle,
+      Seq.fill(
         ray_seq_for_raytriangle.length
       )(SW_OpTriangle)
     )
@@ -885,7 +696,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   val vec_a = vec_pair_seq.map { case (_1, _2) => _1 }
   val vec_b = vec_pair_seq.map { case (_1, _2) => _2 }
 
-  if (test_euclidean_random) {
+  if (test_extended_euclidean_random) {
     testEuclidean(
       s"test random euclidean for ${N_RANDOM_TEST} inputs",
       vec_a,
@@ -896,7 +707,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     // )
   }
 
-  if (test_angular_random) {
+  if (test_extended_angular_random) {
     testAngular(
       s"test random angular for ${N_RANDOM_TEST} inputs",
       vec_a,
