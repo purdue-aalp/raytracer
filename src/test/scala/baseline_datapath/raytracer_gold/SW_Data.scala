@@ -1,7 +1,7 @@
 package baseline_datapath.raytracer_gold
 
 import scala.math._
-
+import scala.util.Random
 object SW_Opcode extends Enumeration {
   type SW_Opcode = Value
   val SW_OpTriangle = Value(0)
@@ -308,9 +308,7 @@ object RandomSWData {
   /** Generate a randomized AABB given the range -range <= x_min, x_max, y_min,
     * y_max, z_min, z_max <= range
     */
-  def genRandomBox(range: Float): SW_Box = {
-    import scala.util.Random
-    lazy val r = new Random()
+  def genRandomBox(range: Float, r: Random = new Random()): SW_Box = {
     assert(range > 0.0f)
     val rands = (0 until 6).map { _ => r.nextFloat() * range * 2 - range }
     val b = new SW_Box(
@@ -334,9 +332,7 @@ object RandomSWData {
     * @param range
     * @return
     */
-  def genRandomRay(range: Float): SW_Ray = {
-    import scala.util.Random
-    lazy val r = new Random()
+  def genRandomRay(range: Float, r: Random = new Random()): SW_Ray = {
     assert(range > 0.0f)
     val rands = (0 until 6).map { _ => r.nextFloat() * 2 * range - range }
     val ray = new SW_Ray(
@@ -350,10 +346,9 @@ object RandomSWData {
   def genRandomRayGivenPoint(
       point: float_3,
       lower_bound: Float,
-      upper_bound: Float
+      upper_bound: Float,
+      r: Random = new Random()
   ): SW_Ray = {
-    import scala.util.Random
-    lazy val r = new Random()
     assert(upper_bound > lower_bound)
 
     var origin = point
@@ -371,9 +366,11 @@ object RandomSWData {
     ray
   }
 
-  def genRandomTriangle(lower_bound: Float, upper_bound: Float): SW_Triangle = {
-    import scala.util.Random
-    lazy val r = new Random()
+  def genRandomTriangle(
+      lower_bound: Float,
+      upper_bound: Float,
+      r: Random = new Random()
+  ): SW_Triangle = {
     assert(upper_bound > lower_bound)
     val rands = (0 until 9).map { _ =>
       r.nextFloat() * (upper_bound - lower_bound) + lower_bound
@@ -390,10 +387,9 @@ object RandomSWData {
   def genRandomVector(
       lower_bound: Float,
       upper_bound: Float,
-      length: Int
+      length: Int,
+      r: Random = new Random()
   ): SW_Vector = {
-    import scala.util.Random
-    lazy val r = new Random()
 
     SW_Vector(
       Seq.fill(length)(
@@ -405,11 +401,9 @@ object RandomSWData {
   def genRandomVectorPair(
       lower_bound: Float,
       upper_bound: Float,
-      largest_length: Int
+      largest_length: Int,
+      r: Random = new Random()
   ): (SW_Vector, SW_Vector) = {
-    import scala.util.Random
-    lazy val r = new Random()
-
     val _length = r.nextInt(largest_length) + 1
     (
       genRandomVector(lower_bound, upper_bound, _length),

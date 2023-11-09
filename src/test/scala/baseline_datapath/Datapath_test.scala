@@ -832,10 +832,10 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
   // randomized tests
   val box_seq_for_raybox = List.fill(N_RANDOM_TEST) {
-    List.fill(4) { RandomSWData.genRandomBox(1e16.toFloat) }
+    List.fill(4) { RandomSWData.genRandomBox(1e16.toFloat, r) }
   }
   val ray_seq_for_raybox = List.fill(N_RANDOM_TEST) {
-    RandomSWData.genRandomRay(1e5.toFloat)
+    RandomSWData.genRandomRay(1e5.toFloat, r)
   }
 
   if (test_ray_box_random) {
@@ -847,13 +847,18 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   }
 
   val tri_seq_for_raytriangle = List.fill(N_RANDOM_TEST)(
-    RandomSWData.genRandomTriangle(-SCENE_BOUNDS.toFloat, SCENE_BOUNDS.toFloat)
+    RandomSWData.genRandomTriangle(
+      -SCENE_BOUNDS.toFloat,
+      SCENE_BOUNDS.toFloat,
+      r
+    )
   )
   val ray_seq_for_raytriangle = tri_seq_for_raytriangle.map { t =>
     RandomSWData.genRandomRayGivenPoint(
       t.centroid,
       -SCENE_BOUNDS.toFloat,
-      SCENE_BOUNDS.toFloat
+      SCENE_BOUNDS.toFloat,
+      r
     )
   }
 
@@ -883,7 +888,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
   val vec_pair_seq =
     Seq.fill(N_RANDOM_TEST)(
-      RandomSWData.genRandomVectorPair(-10.0f, 10.0f, 512)
+      RandomSWData.genRandomVectorPair(-10.0f, 10.0f, 512, r)
     )
 
   val vec_a = vec_pair_seq.map { case (_1, _2) => _1 }
