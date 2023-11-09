@@ -454,7 +454,8 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   })
 
   // stage 5 performs 6 adds for ray-triangle to perform the addition step of
-  // shearing and scaling of triangle vertices, or 8 adds for euclidean to
+  // shearing and scaling of triangle vertices, 12 CAS and 4 comparisons for ray-box
+  // intersection to identify intersecting boxes, or 8 adds for euclidean to
   // reduce the partial sums, or 8 adds for angular to reduce the partial sums
   stage_functions(5) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
@@ -467,6 +468,14 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
       fu.io.detectTininess := _tininess_rule
       fu.io.roundingMode := _rounding_rule
       fu.io.subOp := false.B
+      fu
+    }
+
+    val comparator_fu_list = Seq.fill(4) {
+      val fu = Module(new CompareRecFN(8, 24))
+      fu.io.a := 0.U
+      fu.io.b := 0.U
+      fu.io.signaling := true.B
       fu
     }
 
@@ -520,7 +529,98 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
         }
       }
       is(UnifiedDatapathOpCode.OpQuadbox) {
-        // nothing
+        // ray-box: find t_min for each box and mark non-intersects with
+        // posInfty
+        def flip_intervals_if_dir_is_neg(
+            c_out: Bits,
+            d_out: Bits,
+            a: Bits,
+            b: Bits,
+            c: Bits,
+            d: Bits,
+            dont_flip_if_equal: Boolean // scala type boolean, not Chisel type!
+        ) = {
+          val fu = Module(
+            new RecFNCompareSelect(
+              option = dont_flip_if_equal,
+              passthrough_type = Bits(33.W)
+            )
+          )
+          c_out := fu.io.c_out
+          d_out := fu.io.d_out
+          fu.io.a := a
+          fu.io.b := b
+          fu.io.c := c
+          fu.io.d := d
+        }
+
+        val t_min_intermediate =
+          Wire(Vec(_box_plurality, new Float3(p.internal_recorded_float)))
+        val t_max_intermediate =
+          Wire(Vec(_box_plurality, new Float3(p.internal_recorded_float)))
+        val tmin_intermediate = Wire(Vec(_box_plurality, Bits(33.W)))
+        val tmax_intermediate = Wire(Vec(_box_plurality, Bits(33.W)))
+
+        for (box_idx <- 0 until _box_plurality) {
+          flip_intervals_if_dir_is_neg(
+            t_min_intermediate(box_idx).x,
+            t_max_intermediate(box_idx).x,
+            intake.ray.dir.x,
+            _zero_RecFN,
+            intake.t_min(box_idx).x,
+            intake.t_max(box_idx).x,
+            true
+          )
+          flip_intervals_if_dir_is_neg(
+            t_min_intermediate(box_idx).y,
+            t_max_intermediate(box_idx).y,
+            intake.ray.dir.y,
+            _zero_RecFN,
+            intake.t_min(box_idx).y,
+            intake.t_max(box_idx).y,
+            true
+          )
+          flip_intervals_if_dir_is_neg(
+            t_min_intermediate(box_idx).z,
+            t_max_intermediate(box_idx).z,
+            intake.ray.dir.z,
+            _zero_RecFN,
+            intake.t_min(box_idx).z,
+            intake.t_max(box_idx).z,
+            true
+          )
+
+          val quad_sort_for_tmin = Module(new QuadSortRecFN())
+          quad_sort_for_tmin.io.in(0) := t_min_intermediate(box_idx).x
+          quad_sort_for_tmin.io.in(1) := t_min_intermediate(box_idx).y
+          quad_sort_for_tmin.io.in(2) := t_min_intermediate(box_idx).z
+          quad_sort_for_tmin.io.in(3) := _zero_RecFN
+          tmin_intermediate(box_idx) := quad_sort_for_tmin.io.largest
+
+          val quad_sort_for_tmax = Module(new QuadSortRecFN())
+          quad_sort_for_tmax.io.in(0) := t_max_intermediate(box_idx).x
+          quad_sort_for_tmax.io.in(1) := t_max_intermediate(box_idx).y
+          quad_sort_for_tmax.io.in(2) := t_max_intermediate(box_idx).z
+          quad_sort_for_tmax.io.in(3) := intake.ray.extent
+          tmax_intermediate(box_idx) := quad_sort_for_tmax.io.smallest
+
+          // if there's overlap between [tmin, inf) and (-inf, tmax], we say ray-box
+          // intersection happens
+
+          // a reference to one of the comparators
+          val comp_tmin_tmax = comparator_fu_list(box_idx)
+          comp_tmin_tmax.io.a := tmin_intermediate(box_idx)
+          comp_tmin_tmax.io.b := tmax_intermediate(box_idx)
+          comp_tmin_tmax.io.signaling := true.B
+
+          emit.isIntersect(box_idx) := comp_tmin_tmax.io.lt
+        }
+
+        emit.tmin :=
+          tmin_intermediate.zip(emit.isIntersect).map { case (rec_fn, b) =>
+            Mux(b, rec_fn, _positive_inf_RecFN)
+          }
+
       }
       is(UnifiedDatapathOpCode.OpEuclidean) {
         if (p.support_euclidean.isDefined) {
@@ -960,8 +1060,8 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     emit
   })
 
-  // stage 11 performs 12 CAS, 10 quad-sorts and 4 comparisons for ray-box
-  // intersection to figure out intersecting boxes and sort them; or 5
+  // stage 11 performs 2 quad-sort ray-box
+  // intersection to sort the order of intersections; or 5
   // comparisons for ray-triangle test to determine validity of intersection; or
   // one add for euclidean to accumulate total sum
   stage_functions(11) = Some({ intake =>
@@ -1009,105 +1109,17 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
       }
       is(UnifiedDatapathOpCode.OpQuadbox) {
         // ray-box test
-        def flip_intervals_if_dir_is_neg(
-            c_out: Bits,
-            d_out: Bits,
-            a: Bits,
-            b: Bits,
-            c: Bits,
-            d: Bits,
-            dont_flip_if_equal: Boolean // scala type boolean, not Chisel type!
-        ) = {
-          val fu = Module(
-            new RecFNCompareSelect(
-              option = dont_flip_if_equal,
-              passthrough_type = Bits(33.W)
-            )
-          )
-          c_out := fu.io.c_out
-          d_out := fu.io.d_out
-          fu.io.a := a
-          fu.io.b := b
-          fu.io.c := c
-          fu.io.d := d
-        }
-
-        val isIntersect_intermediate = Wire(Vec(_box_plurality, Bool()))
-        val tmin_intermediate = Wire(Vec(_box_plurality, Bits(33.W)))
-        val tmax_intermediate = Wire(Vec(_box_plurality, Bits(33.W)))
-
-        for (box_idx <- 0 until _box_plurality) {
-          flip_intervals_if_dir_is_neg(
-            emit.t_min(box_idx).x,
-            emit.t_max(box_idx).x,
-            intake.ray.dir.x,
-            _zero_RecFN,
-            intake.t_min(box_idx).x,
-            intake.t_max(box_idx).x,
-            true
-          )
-          flip_intervals_if_dir_is_neg(
-            emit.t_min(box_idx).y,
-            emit.t_max(box_idx).y,
-            intake.ray.dir.y,
-            _zero_RecFN,
-            intake.t_min(box_idx).y,
-            intake.t_max(box_idx).y,
-            true
-          )
-          flip_intervals_if_dir_is_neg(
-            emit.t_min(box_idx).z,
-            emit.t_max(box_idx).z,
-            intake.ray.dir.z,
-            _zero_RecFN,
-            intake.t_min(box_idx).z,
-            intake.t_max(box_idx).z,
-            true
-          )
-
-          val quad_sort_for_tmin = Module(new QuadSortRecFN())
-          quad_sort_for_tmin.io.in(0) := emit.t_min(box_idx).x
-          quad_sort_for_tmin.io.in(1) := emit.t_min(box_idx).y
-          quad_sort_for_tmin.io.in(2) := emit.t_min(box_idx).z
-          quad_sort_for_tmin.io.in(3) := _zero_RecFN
-          tmin_intermediate(box_idx) := quad_sort_for_tmin.io.largest
-
-          val quad_sort_for_tmax = Module(new QuadSortRecFN())
-          quad_sort_for_tmax.io.in(0) := emit.t_max(box_idx).x
-          quad_sort_for_tmax.io.in(1) := emit.t_max(box_idx).y
-          quad_sort_for_tmax.io.in(2) := emit.t_max(box_idx).z
-          quad_sort_for_tmax.io.in(3) := intake.ray.extent
-          tmax_intermediate(box_idx) := quad_sort_for_tmax.io.smallest
-
-          // if there's overlap between [tmin, inf) and (-inf, tmax], we say ray-box
-          // intersection happens
-
-          // a reference to one of the comparators
-          val comp_tmin_tmax = comparator_fu_list(box_idx)
-          comp_tmin_tmax.io.a := tmin_intermediate(box_idx)
-          comp_tmin_tmax.io.b := tmax_intermediate(box_idx)
-          comp_tmin_tmax.io.signaling := true.B
-
-          isIntersect_intermediate(box_idx) := comp_tmin_tmax.io.lt
-        }
-
-        val tmin_but_substitute_non_intersect_with_PInf =
-          tmin_intermediate.zip(isIntersect_intermediate).map {
-            case (rec_fn, b) =>
-              Mux(b, rec_fn, _positive_inf_RecFN)
-          }
-
         // sorter outputs from biggest to smallest, so reverse output
         val quad_sort_for_box_index = Module(new QuadSortRecFNWithIndex)
-        quad_sort_for_box_index.io.in := tmin_but_substitute_non_intersect_with_PInf
+        quad_sort_for_box_index.io.in := intake.tmin
         emit.boxIndex := quad_sort_for_box_index.io.sorted_indices.reverse
 
         val quad_sort_for_t = Module(new QuadSortRecFN)
-        quad_sort_for_t.io.in := tmin_but_substitute_non_intersect_with_PInf
+        quad_sort_for_t.io.in := intake.tmin
         emit.tmin := quad_sort_for_t.io.out.reverse
 
         emit.isIntersect.zip(emit.boxIndex).foreach { case (b, idx) =>
-          b := isIntersect_intermediate(idx)
+          b := intake.isIntersect(idx)
         }
 
       }

@@ -182,7 +182,6 @@ class ExtendedPipelineBundle(private val p: RaytracerParams)
   val t_min = Vec(4, new Float3(recorded_float))
   val t_max = Vec(4, new Float3(recorded_float))
   val tmin = Vec(4, Bits(_bit_width))
-  val tmax = Vec(4, Bits(_bit_width))
   val isIntersect = Vec(4, Bool())
   val boxIndex = Vec(4, UInt(2.W))
 
