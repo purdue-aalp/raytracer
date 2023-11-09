@@ -43,17 +43,19 @@ class Datapath_wrapper extends Datapath {
   // val exposed_tmax_3d = expose(Float3ConvertRecFNtoFN(tmax_3d))
 }
 
-trait WithExposedTime extends Module{
+trait WithExposedTime extends Module {
   def exposed_time: Bits
 }
 
 class UnifiedDatapath_wrapper
-    extends UnifiedDatapath(p = RaytracerParams(false, true, None)) with WithExposedTime {
+    extends UnifiedDatapath(p = RaytracerParams(false, true, None))
+    with WithExposedTime {
   val exposed_time = expose(_time)
 }
 
 class UnifiedDatapath_wrapper_16
-    extends UnifiedDatapath(p = RaytracerParams(false, true, Some(16))) with WithExposedTime {
+    extends UnifiedDatapath(p = RaytracerParams(false, true, Some(16)))
+    with WithExposedTime {
   import hardfloat._
   val exposed_time = expose(_time)
   // val exposed_stage_10_accum = expose(stage_10_norm_accum)
@@ -880,7 +882,9 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   }
 
   val vec_pair_seq =
-    Seq.fill(N_RANDOM_TEST)(RandomSWData.genRandomVectorPair(-10.0f, 10.0f, 512))
+    Seq.fill(N_RANDOM_TEST)(
+      RandomSWData.genRandomVectorPair(-10.0f, 10.0f, 512)
+    )
 
   val vec_a = vec_pair_seq.map { case (_1, _2) => _1 }
   val vec_b = vec_pair_seq.map { case (_1, _2) => _2 }

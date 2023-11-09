@@ -42,7 +42,6 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
   val PRINT_END_TIME = true
   val float_tolerance_error =
     0.001 // normalized error: 149 vs 100 would have an error of 0.49
-  val use_stage_submodule = false
   val dump_vcd_for_unified_test = false
 
   val test_baseline_ray_box_random = true
@@ -58,18 +57,16 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
   val empty_vec_b = SW_Vector(Nil)
 
   def gen_baseline_or_extended_datapath(extended: Boolean) = extended match {
-    case true => new UnifiedDatapath_wrapper_16
+    case true  => new UnifiedDatapath_wrapper_16
     case false => new UnifiedDatapath_wrapper
   }
 
-  val chisel_test_annotations = Seq(
+  def chisel_test_annotations(description: String) = Seq(
     VerilatorBackendAnnotation,
     CachingAnnotation,
     // CachingDebugAnnotation,
     TargetDirAnnotation(
-      if (use_stage_submodule)
-        "cached_verilator_backend/Datapath_stage_submodule"
-      else "cached_verilator_backend/Datapath_monolithic"
+      s"cached_verilator_backend/${description.replaceAll("[^0-9a-zA-Z]", "_")}"
     ),
     // WriteVcdAnnotation,
     VerilatorCFlags(Seq("-Os", "-march=native")),
@@ -80,6 +77,109 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
     ThrowOnFirstErrorAnnotation,
     PrintFullStackTraceAnnotation
   )
+
+  // randomized tests
+  val box_seq_for_raybox = List.fill(N_RANDOM_TEST) {
+    List.fill(4) { RandomSWData.genRandomBox(1e16.toFloat) }
+  }
+  val ray_seq_for_raybox = List.fill(N_RANDOM_TEST) {
+    RandomSWData.genRandomRay(1e5.toFloat)
+  }
+
+  if (test_baseline_ray_box_random) {
+    testUnifiedIntersection(
+      false,
+      s"${N_RANDOM_TEST} baseline ray box random test",
+      ray_seq_for_raybox,
+      box_seq_for_raybox,
+      Seq.fill(ray_seq_for_raybox.length)(
+        SW_Triangle()
+      ),
+      Seq.fill(ray_seq_for_raybox.length)(SW_OpQuadbox)
+    )
+  }
+
+  val tri_seq_for_raytriangle = List.fill(N_RANDOM_TEST)(
+    RandomSWData.genRandomTriangle(-SCENE_BOUNDS.toFloat, SCENE_BOUNDS.toFloat)
+  )
+  val ray_seq_for_raytriangle = tri_seq_for_raytriangle.map { t =>
+    RandomSWData.genRandomRayGivenPoint(
+      t.centroid,
+      -SCENE_BOUNDS.toFloat,
+      SCENE_BOUNDS.toFloat
+    )
+  }
+
+  if (test_baseline_ray_triangle_random) {
+    testUnifiedIntersection(
+      false,
+      s"${N_RANDOM_TEST} baseline ray triangle random test",
+      ray_seq_for_raytriangle,
+      Seq.fill(ray_seq_for_raytriangle.length)(
+        Seq.fill(4)(SW_Box())
+      ),
+      tri_seq_for_raytriangle,
+      Seq.fill(ray_seq_for_raybox.length)(SW_OpTriangle)
+    )
+  }
+
+  if (test_extended_ray_box_random) {
+    testUnifiedIntersection(
+      true,
+      s"${N_RANDOM_TEST} extended ray box random test",
+      ray_seq_for_raybox,
+      box_seq_for_raybox,
+      Seq.fill(ray_seq_for_raybox.length)(
+        SW_Triangle()
+      ),
+      Seq.fill(ray_seq_for_raybox.length)(SW_OpQuadbox)
+    )
+  }
+
+  if (test_extended_ray_triangle_random) {
+    testUnifiedIntersection(
+      true,
+      s"${N_RANDOM_TEST} extended ray triangle random test",
+      ray_seq_for_raytriangle,
+      Seq.fill(ray_seq_for_raytriangle.length)(
+        Seq.fill(4)(SW_Box())
+      ),
+      tri_seq_for_raytriangle,
+      Seq.fill(
+        ray_seq_for_raytriangle.length
+      )(SW_OpTriangle)
+    )
+  }
+
+  val vec_pair_seq =
+    Seq.fill(N_RANDOM_TEST)(
+      RandomSWData.genRandomVectorPair(-10000.0f, 10000.0f, 512)
+    )
+
+  val vec_a = vec_pair_seq.map { case (_1, _2) => _1 }
+  val vec_b = vec_pair_seq.map { case (_1, _2) => _2 }
+
+  if (test_extended_euclidean_random) {
+    testEuclidean(
+      s"${N_RANDOM_TEST} extended euclidean test",
+      vec_a,
+      vec_b
+    )
+    // testEuclidean("test 16 element euclidean",
+    // Seq(default_vec_a), Seq(default_vec_b)
+    // )
+  }
+
+  if (test_extended_angular_random) {
+    testAngular(
+      s"${N_RANDOM_TEST} extended angular test",
+      vec_a,
+      vec_b
+    )
+    // testEuclidean("test 16 element euclidean",
+    // Seq(default_vec_a), Seq(default_vec_b)
+    // )
+  }
 
   def check_raybox_result(
       input_no: Int,
@@ -233,7 +333,7 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
     description in {
       test(gen_baseline_or_extended_datapath((extended)))
         .withAnnotations(
-          chisel_test_annotations
+          chisel_test_annotations(description)
         )
         .withChiselAnnotations(
           chisel_test_chisel_annotations
@@ -271,7 +371,7 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
   }
 
   def testRayTriangleIntersection(
-    extended: Boolean,
+      extended: Boolean,
       description: String,
       triangle_seq: Seq[SW_Triangle],
       ray_seq: Seq[SW_Ray]
@@ -319,7 +419,7 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
 
       test(gen_baseline_or_extended_datapath((extended)))
         .withAnnotations(
-          chisel_test_annotations
+          chisel_test_annotations(description)
         )
         .withChiselAnnotations(
           chisel_test_chisel_annotations
@@ -394,11 +494,11 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
 
     test(new UnifiedDatapath_wrapper_16)
       .withAnnotations(
-        chisel_test_annotations :++ {
+        chisel_test_annotations(description) :++ {
           if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }
           else { Nil }
         }
-        // chisel_test_annotations
+        // chisel_test_annotations(description)
       )
       .withChiselAnnotations(
         chisel_test_chisel_annotations
@@ -464,11 +564,11 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
 
     test(new UnifiedDatapath_wrapper_16)
       .withAnnotations(
-        chisel_test_annotations :++ {
+        chisel_test_annotations(description) :++ {
           if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }
           else { Nil }
         }
-        // chisel_test_annotations
+        // chisel_test_annotations(description)
       )
       .withChiselAnnotations(
         chisel_test_chisel_annotations
@@ -520,7 +620,7 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
   }
 
   def testUnifiedIntersection(
-    extended: Boolean,
+      extended: Boolean,
       description: String,
       ray_seq: Seq[SW_Ray],
       box_seq_seq: Seq[Seq[SW_Box]],
@@ -529,20 +629,41 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
   ): Unit = {
     description in {
       val combined_data_list: List[SW_EnhancedCombinedData] = List.from {
-        (ray_seq zip box_seq_seq zip triangle_seq zip op_seq).map {
-          case (((ray, boxs), tri), op) =>
-            SW_EnhancedCombinedData(
-              ray,
-              boxs,
-              tri,
-              op,
-              Some(16),
-              default_vec_a,
-              default_vec_b,
-              true,
-              0
-            )
+        extended match {
+          case true =>
+            // input bundle should include 16-elements for each of vec a and b
+            (ray_seq zip box_seq_seq zip triangle_seq zip op_seq).map {
+              case (((ray, boxs), tri), op) =>
+                SW_EnhancedCombinedData(
+                  ray,
+                  boxs,
+                  tri,
+                  op,
+                  Some(16),
+                  default_vec_a,
+                  default_vec_b,
+                  true,
+                  0
+                )
+            }
+          case false =>
+            // input bundle does not include vector elements
+            (ray_seq zip box_seq_seq zip triangle_seq zip op_seq).map {
+              case (((ray, boxs), tri), op) =>
+                SW_EnhancedCombinedData(
+                  ray,
+                  boxs,
+                  tri,
+                  op,
+                  None,
+                  empty_vec_a,
+                  empty_vec_b,
+                  true,
+                  0
+                )
+            }
         }
+
       }
 
       // a sequence of software gold results
@@ -572,7 +693,9 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
               SW_RayTriangle_Result(),
               RaytracerGold.testIntersection(r, bs)
             )
-          case _ => { throw new Exception("cannot take ray box data") }
+          case _ => {
+            throw new Exception("cannot take jobs other than box/triangle")
+          }
         }
       }
 
@@ -580,11 +703,11 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
 
       test(gen_baseline_or_extended_datapath(extended))
         .withAnnotations(
-          chisel_test_annotations :++ {
+          chisel_test_annotations(description) :++ {
             if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }
             else { Nil }
           }
-          // chisel_test_annotations
+          // chisel_test_annotations(description)
         )
         .withChiselAnnotations(
           chisel_test_chisel_annotations
@@ -593,7 +716,7 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
           dut.out.initSink().setSinkClock(dut.clock)
 
           fork {
-            dut.in.enqueueSeq(combined_data_list.toList)
+            dut.in.enqueueSeq(combined_data_list)
           }.fork {
             dut.out.ready.poke(true.B)
             sw_result_seq.zipWithIndex.map { case (sw_r, input_no) =>
@@ -616,106 +739,4 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
 
     }
   }
-
-  // randomized tests
-  val box_seq_for_raybox = List.fill(N_RANDOM_TEST) {
-    List.fill(4) { RandomSWData.genRandomBox(1e16.toFloat) }
-  }
-  val ray_seq_for_raybox = List.fill(N_RANDOM_TEST) {
-    RandomSWData.genRandomRay(1e5.toFloat)
-  }
-
-  if (test_baseline_ray_box_random) {
-    testUnifiedIntersection(
-      false,
-      s"${N_RANDOM_TEST} randomized rays and boxes within range -10000.0, 10000.0",
-      ray_seq_for_raybox,
-      box_seq_for_raybox,
-      Seq.fill(ray_seq_for_raybox.length)(
-        SW_Triangle()
-      ),
-      Seq.fill(ray_seq_for_raybox.length)(SW_OpQuadbox) 
-    )
-  }
-
-  val tri_seq_for_raytriangle = List.fill(N_RANDOM_TEST)(
-    RandomSWData.genRandomTriangle(-SCENE_BOUNDS.toFloat, SCENE_BOUNDS.toFloat)
-  )
-  val ray_seq_for_raytriangle = tri_seq_for_raytriangle.map { t =>
-    RandomSWData.genRandomRayGivenPoint(
-      t.centroid,
-      -SCENE_BOUNDS.toFloat,
-      SCENE_BOUNDS.toFloat
-    )
-  }
-
-  if (test_baseline_ray_triangle_random) {
-    testUnifiedIntersection(
-      false,
-      s"${N_RANDOM_TEST} randomized rays and triangles within range ${SCENE_BOUNDS}",
-      ray_seq_for_raytriangle,
-      Seq.fill(ray_seq_for_raytriangle.length)(
-        Seq.fill(4)(SW_Box())
-      ),
-      tri_seq_for_raytriangle,
-      Seq.fill(ray_seq_for_raybox.length)(SW_OpTriangle) 
-    )
-  }
-
-  if (test_extended_ray_box_random) {
-    testUnifiedIntersection(
-      true,
-      "extended ray box random test",
-      ray_seq_for_raybox,
-      box_seq_for_raybox,
-      Seq.fill(ray_seq_for_raybox.length)(
-        SW_Triangle()
-      ),
-      Seq.fill(ray_seq_for_raybox.length)(SW_OpQuadbox) 
-    )
-  }
-
-  if(test_extended_ray_triangle_random){
-    testUnifiedIntersection(
-      true,
-      "extended ray triangle random test",
-      ray_seq_for_raytriangle,
-      Seq.fill(ray_seq_for_raytriangle.length)(
-        Seq.fill(4)(SW_Box())
-      ),
-      tri_seq_for_raytriangle,
-      Seq.fill(
-        ray_seq_for_raytriangle.length
-      )(SW_OpTriangle)
-    )
-  }
-
-  val vec_pair_seq =
-    Seq.fill(N_RANDOM_TEST)(RandomSWData.genRandomVectorPair(-10.0f, 10.0f, 512))
-
-  val vec_a = vec_pair_seq.map { case (_1, _2) => _1 }
-  val vec_b = vec_pair_seq.map { case (_1, _2) => _2 }
-
-  if (test_extended_euclidean_random) {
-    testEuclidean(
-      s"test random euclidean for ${N_RANDOM_TEST} inputs",
-      vec_a,
-      vec_b
-    )
-    // testEuclidean("test 16 element euclidean",
-    // Seq(default_vec_a), Seq(default_vec_b)
-    // )
-  }
-
-  if (test_extended_angular_random) {
-    testAngular(
-      s"test random angular for ${N_RANDOM_TEST} inputs",
-      vec_a,
-      vec_b
-    )
-    // testEuclidean("test 16 element euclidean",
-    // Seq(default_vec_a), Seq(default_vec_b)
-    // )
-  }
-
 }
