@@ -38,11 +38,11 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
   type HW_Box = baseline_datapath.AABB
 
   val r = new Random()
-  val N_RANDOM_TEST = 30
+  val N_RANDOM_TEST = 4096
   val PRINT_END_TIME = true
   val float_tolerance_error =
     0.001 // normalized error: 149 vs 100 would have an error of 0.49
-  val dump_vcd_for_unified_test = false
+  val dump_vcd_for_unified_test = true
 
   val test_baseline_ray_box_random = true
   val test_baseline_ray_triangle_random = true
@@ -80,16 +80,16 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
 
   // randomized tests
   val box_seq_for_raybox = List.fill(N_RANDOM_TEST) {
-    List.fill(4) { RandomSWData.genRandomBox(1e16.toFloat) }
+    List.fill(4) { RandomSWData.genRandomBox(1e4.toFloat) }
   }
   val ray_seq_for_raybox = List.fill(N_RANDOM_TEST) {
-    RandomSWData.genRandomRay(1e5.toFloat)
+    RandomSWData.genRandomRay(1e2.toFloat)
   }
 
   if (test_baseline_ray_box_random) {
     testUnifiedIntersection(
       false,
-      s"${N_RANDOM_TEST} baseline ray box random test",
+      s"baseline ray box random test ${N_RANDOM_TEST}",
       ray_seq_for_raybox,
       box_seq_for_raybox,
       Seq.fill(ray_seq_for_raybox.length)(
@@ -113,7 +113,7 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
   if (test_baseline_ray_triangle_random) {
     testUnifiedIntersection(
       false,
-      s"${N_RANDOM_TEST} baseline ray triangle random test",
+      s"baseline ray triangle random test ${N_RANDOM_TEST}",
       ray_seq_for_raytriangle,
       Seq.fill(ray_seq_for_raytriangle.length)(
         Seq.fill(4)(SW_Box())
@@ -126,7 +126,7 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
   if (test_extended_ray_box_random) {
     testUnifiedIntersection(
       true,
-      s"${N_RANDOM_TEST} extended ray box random test",
+      s"extended ray box random test ${N_RANDOM_TEST}",
       ray_seq_for_raybox,
       box_seq_for_raybox,
       Seq.fill(ray_seq_for_raybox.length)(
@@ -139,7 +139,7 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
   if (test_extended_ray_triangle_random) {
     testUnifiedIntersection(
       true,
-      s"${N_RANDOM_TEST} extended ray triangle random test",
+      s"extended ray triangle random test ${N_RANDOM_TEST}",
       ray_seq_for_raytriangle,
       Seq.fill(ray_seq_for_raytriangle.length)(
         Seq.fill(4)(SW_Box())
@@ -153,7 +153,7 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
 
   val vec_pair_seq =
     Seq.fill(N_RANDOM_TEST)(
-      RandomSWData.genRandomVectorPair(-10000.0f, 10000.0f, 512)
+      RandomSWData.genRandomVectorPair(-10000.0f, 10000.0f, 16 * 8)
     )
 
   val vec_a = vec_pair_seq.map { case (_1, _2) => _1 }
@@ -161,7 +161,7 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
 
   if (test_extended_euclidean_random) {
     testEuclidean(
-      s"${N_RANDOM_TEST} extended euclidean test",
+      s"extended euclidean test ${N_RANDOM_TEST}",
       vec_a,
       vec_b
     )
@@ -172,7 +172,7 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
 
   if (test_extended_angular_random) {
     testAngular(
-      s"${N_RANDOM_TEST} extended angular test",
+      s"extended angular test ${N_RANDOM_TEST}",
       vec_a,
       vec_b
     )
@@ -283,196 +283,6 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
     }
 
     t_error
-  }
-
-  // Define a function for ray-box intersection testing
-  def testRayBoxIntersection(
-      extended: Boolean,
-      description: String,
-      box_seq_seq: Seq[Seq[SW_Box]],
-      ray_seq: Seq[SW_Ray]
-  ): Unit = {
-
-    val ray_box_list: List[SW_EnhancedCombinedData] = List.from {
-      (ray_seq zip box_seq_seq).map { case (r, bs) =>
-        SW_EnhancedCombinedData(
-          r,
-          bs,
-          SW_Triangle(),
-          SW_OpQuadbox,
-          None,
-          empty_vec_a,
-          empty_vec_b,
-          true,
-          0
-        )
-      }
-    }
-
-    // a sequence of software gold results
-    val sw_result_seq: List[SW_RayBox_Result] = {
-      ray_box_list.map {
-        case SW_EnhancedCombinedData(
-              r,
-              bseq,
-              t,
-              SW_OpQuadbox,
-              _,
-              _,
-              _,
-              _,
-              _
-            ) => {
-          // println("calculated a sw result")
-          RaytracerGold.testIntersection(r, bseq)
-        }
-        case _ => throw new Exception("must be ray-box op!")
-      }
-    }
-
-    description in {
-      test(gen_baseline_or_extended_datapath((extended)))
-        .withAnnotations(
-          chisel_test_annotations(description)
-        )
-        .withChiselAnnotations(
-          chisel_test_chisel_annotations
-        ) { dut =>
-          dut.in.initSource().setSourceClock(dut.clock)
-          dut.out.initSink().setSinkClock(dut.clock)
-
-          fork {
-            // On the one hand, we pipe-in the test case inputs
-            // (our helper method will automatically convert them from SW_Combined
-            // to CombinedRayBoxTriangleBundle).
-            dut.in.enqueueSeq(ray_box_list)
-          }.fork {
-            dut.out.ready.poke(true.B)
-            // On the other hand, we sit at the output side and examing for valid
-            // outputs one-by-one.
-            // Because non-intersects have unspecified order, the software result
-            // may have different order than the actual hw output. Hence the for
-            // loop.
-            sw_result_seq.zipWithIndex.foreach { case (sw_r, input_no) =>
-              dut.out.waitForValid()
-
-              check_raybox_result(input_no, sw_r, dut.out.bits)
-
-              dut.clock.step()
-            }
-          }.join()
-
-          if (PRINT_END_TIME) {
-            println(s"test ends at time ${dut.exposed_time.peek().litValue}")
-          }
-
-        }
-    }
-  }
-
-  def testRayTriangleIntersection(
-      extended: Boolean,
-      description: String,
-      triangle_seq: Seq[SW_Triangle],
-      ray_seq: Seq[SW_Ray]
-  ): Unit = {
-    description in {
-      val ray_triangle_list: List[SW_EnhancedCombinedData] = List.from {
-        (ray_seq zip triangle_seq).map { case (r, ts) =>
-          lazy val _four_empty_boxes = Seq.fill[SW_Box](4)(SW_Box())
-          SW_EnhancedCombinedData(
-            r,
-            _four_empty_boxes,
-            ts,
-            SW_OpTriangle,
-            None,
-            empty_vec_a,
-            empty_vec_b,
-            true,
-            0
-          )
-        }
-      }
-
-      // a sequence of software gold results
-      val sw_result_seq: List[SW_RayTriangle_Result] = {
-        ray_triangle_list.map {
-          case SW_EnhancedCombinedData(
-                r,
-                _,
-                t,
-                SW_OpTriangle,
-                _,
-                _,
-                _,
-                _,
-                _
-              ) => {
-            // println("calculated a sw result")
-            RaytracerGold.testTriangleIntersection(r, t)
-          }
-          case _ => { throw new Exception("cannot take ray box data") }
-        }
-      }
-
-      var worst_normalized_error = 0.0f
-
-      test(gen_baseline_or_extended_datapath((extended)))
-        .withAnnotations(
-          chisel_test_annotations(description)
-        )
-        .withChiselAnnotations(
-          chisel_test_chisel_annotations
-        ) { dut =>
-          dut.in.initSource().setSourceClock(dut.clock)
-          dut.out.initSink().setSinkClock(dut.clock)
-
-          // ray_triangle_list.zip(sw_result_seq).foreach { case (data, result) =>
-          //   println(f"data: ${data}, result: ${result}")
-          // }
-          fork {
-            dut.in.enqueueSeq(ray_triangle_list)
-          }.fork {
-            dut.out.ready.poke(true.B)
-            sw_result_seq.zipWithIndex.zip(ray_triangle_list).foreach {
-              case ((sw_r, input_no), input) =>
-                dut.out.waitForValid()
-
-                // val hw_t_num: Float = bitsToFloat(dut.out.bits.t_num.peek())
-                // val hw_t_denom: Float = bitsToFloat(dut.out.bits.t_denom.peek())
-                // val hw_hit: Boolean =
-                //   dut.out.bits.triangle_hit.peek().litToBoolean
-
-                // val error_msg_obj = new AnyRef {
-                //   lazy val message =
-                //     f"Input #${input_no}: ${input},\n predicted output: ${sw_r}, \n actual output: t_num=${hw_t_num}, t_denom=${hw_t_denom}, hit=${hw_hit}\n"
-                //   override def toString: String = message
-                // }
-
-                // assert(hw_hit == sw_r.is_hit, error_msg_obj)
-                // if (sw_r.is_hit) {
-                //   val hw_t = hw_t_num / hw_t_denom
-                //   val sw_t = sw_r.t_num / sw_r.t_denom
-                //   val t_error = abs(hw_t - sw_t) / sw_t
-
-                //   // assert(t_error <= float_tolerance_error, error_msg_obj)
-                //   worst_normalized_error = max(worst_normalized_error, t_error)
-                // }
-
-                val t_error =
-                  check_raytriangle_result(input_no, sw_r, dut.out.bits)
-                worst_normalized_error = max(worst_normalized_error, t_error)
-
-                dut.clock.step()
-            }
-          }.join()
-
-          if (PRINT_END_TIME) {
-            println(s"test ends at time ${dut.exposed_time.peek().litValue}")
-          }
-        }
-      println(s"worst normalized error is ${worst_normalized_error}")
-    }
   }
 
   def testEuclidean(
