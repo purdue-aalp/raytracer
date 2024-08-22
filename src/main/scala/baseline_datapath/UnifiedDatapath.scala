@@ -590,6 +590,10 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
             true
           )
 
+          // We are using a QuadSort network simply to find the mimimum among
+          // four values. Each QuadSort network has 5 comparators, but the
+          // compiler will eliminate all unused nodes, so each circuit ends up with
+          // just 3 comparators that help identify the minimum input!
           val quad_sort_for_tmin = Module(new QuadSortRecFN())
           quad_sort_for_tmin.io.in(0) := t_min_intermediate(box_idx).x
           quad_sort_for_tmin.io.in(1) := t_min_intermediate(box_idx).y
