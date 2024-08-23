@@ -107,11 +107,9 @@ object EmitVerilog extends App {
 
   // // print(shortest_code)
 
-  // // val sv_code = ChiselStage.emitSystemVerilog(new Bar(outExp = 9, outSig =
-  // // 27))
-  // val sv_code = ChiselStage.emitSystemVerilog(new ChainedSkidBufferStages)
+  // val sv_code = ChiselStage.emitSystemVerilog(new Bar(outExp = 9, outSig =
+  // 27))
+  val sv_code = ChiselStage.emitSystemVerilog(new ChainedSkidBufferStages)
 
-  import playground._
-  val sv_code = ChiselStage.emitSystemVerilog(new Dataview_Try_Module)
   print(sv_code)
 }
