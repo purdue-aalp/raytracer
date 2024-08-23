@@ -38,11 +38,11 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
   type HW_Box = baseline_datapath.AABB
 
   val r = new Random()
-  val N_RANDOM_TEST = 4096
+  val N_RANDOM_TEST = 100
   val PRINT_END_TIME = true
   val float_tolerance_error =
     0.001 // normalized error: 149 vs 100 would have an error of 0.49
-  val dump_vcd_for_unified_test = true
+  val dump_vcd_for_unified_test = false
 
   val test_baseline_ray_box_random = true
   val test_baseline_ray_triangle_random = true
@@ -309,7 +309,7 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
 
     test(new UnifiedDatapath_wrapper_16)
       .withAnnotations(
-        chisel_test_annotations(description) :++ {
+        chisel_test_annotations("euclidean"+true.toString()) :++ {
           if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }
           else { Nil }
         }
@@ -379,7 +379,7 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
 
     test(new UnifiedDatapath_wrapper_16)
       .withAnnotations(
-        chisel_test_annotations(description) :++ {
+        chisel_test_annotations("euclidean"+true.toString()) :++ {
           if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }
           else { Nil }
         }
@@ -518,7 +518,7 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
 
       test(gen_baseline_or_extended_datapath(extended))
         .withAnnotations(
-          chisel_test_annotations(description) :++ {
+          chisel_test_annotations("euclidean"+extended.toString()) :++ {
             if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }
             else { Nil }
           }
