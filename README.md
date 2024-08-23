@@ -4,6 +4,9 @@ Mill is the preferred means of building
 mill raytracer.test.testOnly baseline_datapath.Datapath_test_for_vcd
 sbt test:testOnly baseline_datapath.Datapath_test_for_vcd
 
+mill raytracer.test
+sbt test
+
 # current problems
 - Datapath_test.scala cannot go through all tests in a single run because the
 verilator model for two different DUTs have a hash collision
