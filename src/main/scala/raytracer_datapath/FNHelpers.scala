@@ -1,4 +1,4 @@
-package baseline_datapath
+package raytracer_datapath
 
 import chisel3._
 

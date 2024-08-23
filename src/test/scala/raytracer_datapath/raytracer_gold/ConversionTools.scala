@@ -1,7 +1,7 @@
-package baseline_datapath.raytracer_gold
+package raytracer_datapath.raytracer_gold
 
 import chisel3._
-import baseline_datapath._
+import raytracer_datapath._
 import scala.language.implicitConversions
 import java.nio.ByteBuffer
 

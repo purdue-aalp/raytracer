@@ -1,4 +1,4 @@
-package baseline_datapath
+package raytracer_datapath
 
 import chisel3._
 import chiseltest._
@@ -10,9 +10,9 @@ import chiseltest.experimental.expose
 import chisel3.experimental.BundleLiterals._
 import chisel3.experimental.VecLiterals._
 
-import baseline_datapath.raytracer_gold._
-import baseline_datapath.raytracer_gold.RaytracerTestHelper._ // implicit conversions
-import baseline_datapath.raytracer_gold.SW_Ray.SCENE_BOUNDS
+import raytracer_datapath.raytracer_gold._
+import raytracer_datapath.raytracer_gold.RaytracerTestHelper._ // implicit conversions
+import raytracer_datapath.raytracer_gold.SW_Ray.SCENE_BOUNDS
 
 import chiseltest.internal.CachingAnnotation
 import firrtl2.options.TargetDirAnnotation
@@ -45,20 +45,14 @@ class UnifiedDatapath_wrapper_16
     with WithExposedTime {
   import hardfloat._
   val exposed_time = expose(_time)
-  // val exposed_stage_10_accum = expose(stage_10_norm_accum)
-  // val exposed_stage_9_norm = expose(stage_9_norm_sum)
-  // val exposed_stage_4_vec_b = expose(stage_4_vec_b)
-  // val exposed_stage_5_vec_b = expose(stage_5_vec_b)
-  // val exposed_stage_6_vec_b = expose(stage_6_vec_b)
-  // val exposed_stage_7_vec_b = expose(stage_7_vec_b)
 }
 
 
-class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
+class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
   // we are dealing with hardware and software Ray types
-  type HW_Ray = baseline_datapath.Ray
-  type HW_Box = baseline_datapath.AABB
+  type HW_Ray = raytracer_datapath.Ray
+  type HW_Box = raytracer_datapath.AABB
 
   val r = new Random()
   val N_RANDOM_TEST = 100
@@ -193,9 +187,6 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
       vec_a,
       vec_b
     )
-    // testEuclidean("test 16 element euclidean",
-    // Seq(default_vec_a), Seq(default_vec_b)
-    // )
   }
 
   if (test_extended_angular_random) {
@@ -204,9 +195,6 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
       vec_a,
       vec_b
     )
-    // testEuclidean("test 16 element euclidean",
-    // Seq(default_vec_a), Seq(default_vec_b)
-    // )
   }
 
   def check_raybox_result(
@@ -305,9 +293,6 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
       val hw_t = hw_t_num / hw_t_denom
       val sw_t = sw_result.t_num / sw_result.t_denom
       t_error = abs(hw_t - sw_t) / sw_t
-
-      // assert(t_error <= float_tolerance_error, error_msg_obj)
-      // worst_normalized_error = max(worst_normalized_error, t_error)
     }
 
     t_error
@@ -358,9 +343,6 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
               dut.out.waitForValid()
             }
 
-            // println(s"${idx}: sw_result: ${sw_sum}, hardware result: ${bitsToFloat(dut.out.bits.euclidean_accumulator(0).peek())}")
-            // assert(sw_sum ==
-            // bitsToFloat(dut.out.bits.euclidean_accumulator(0).peek()))
             val normalized_diff = abs(
               sw_sum - bitsToFloat(
                 dut.out.bits.euclidean_accumulator(0).peek()
@@ -406,7 +388,6 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
           if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }
           else { Nil }
         }
-        // chisel_test_annotations(description)
       )
       .withChiselAnnotations(
         chisel_test_chisel_annotations
@@ -428,9 +409,6 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
               dut.out.waitForValid()
             }
 
-            // println(s"${idx}: sw_result: ${sw_result}, hardware result (dot_product): ${bitsToFloat(dut.out.bits.angular_dot_product(0).peek())}, (norm): ${bitsToFloat(dut.out.bits.angular_norm(0).peek())}")
-            // assert(sw_sum ==
-            // bitsToFloat(dut.out.bits.euclidean_accumulator(0).peek()))
             val normalized_diff_dot_product = abs(
               sw_result("dot_product") - bitsToFloat(
                 dut.out.bits.angular_dot_product(0).peek()
@@ -545,7 +523,6 @@ class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
             if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }
             else { Nil }
           }
-          // chisel_test_annotations(description)
         )
         .withChiselAnnotations(
           chisel_test_chisel_annotations

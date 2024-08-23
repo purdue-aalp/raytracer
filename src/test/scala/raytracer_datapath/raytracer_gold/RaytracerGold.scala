@@ -1,4 +1,4 @@
-package baseline_datapath.raytracer_gold
+package raytracer_datapath.raytracer_gold
 
 import chisel3._
 import scala.math._

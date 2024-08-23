@@ -1,4 +1,4 @@
-package baseline_datapath
+package raytracer_datapath
 
 import chisel3._
 import hardfloat._
@@ -1185,20 +1185,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     s.emit
   }
   _last_stage_emit_port.ready := true.B
-
-  // val stage_4_vec_b = Wire(Vec(16, Bits(32.W)))
-  // val stage_5_vec_b = Wire(Vec(16, Bits(32.W)))
-  // val stage_6_vec_b = Wire(Vec(16, Bits(32.W)))
-  // val stage_7_vec_b = Wire(Vec(16, Bits(32.W)))
-  // for(idx<- 0 until 16){
-  //   stage_4_vec_b(idx) := fNFromRecFN(8, 24, stage_modules(4).emit.bits.vec_b(idx))
-  //   stage_5_vec_b(idx) := fNFromRecFN(8, 24, stage_modules(5).emit.bits.vec_b(idx))
-  //   stage_6_vec_b(idx) := fNFromRecFN(8, 24, stage_modules(6).emit.bits.vec_b(idx))
-  //   stage_7_vec_b(idx) := fNFromRecFN(8, 24, stage_modules(7).emit.bits.vec_b(idx))
-  // }
-  // val stage_10_norm_accum = fNFromRecFN(8, 24, stage_modules(10).emit.bits.angular_norm_accum_val(0))
-  // val stage_9_norm_sum = fNFromRecFN(8, 24, stage_modules(9).emit.bits.vec_b(0))
-
+  
   // now that all stages are chained up, overwrite the first few stages
   // stage 1 is deprecated, since we have skid buffers now
   // stage 2 converts FN to RecFN, so we need a more generic SkidBufferStage

@@ -1,11 +1,11 @@
-package baseline_datapath
+package raytracer_datapath
 
 import chisel3._
 import chiseltest._
 import org.scalatest.freespec.AnyFreeSpec
 import scala.util.Random
 import hardfloat._
-import baseline_datapath.raytracer_gold._
+import raytracer_datapath.raytracer_gold._
 
 class ValExec_FNFlipSign extends Module {
   val in = IO(Input(Bits(32.W)))
