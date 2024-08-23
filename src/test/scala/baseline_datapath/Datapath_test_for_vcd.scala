@@ -30,6 +30,29 @@ import chiseltest.simulator.{
 
 // SW opcode is an enumeration defined in SW_Data.scala
 import SW_Opcode._
+trait WithExposedTime extends Module {
+  def exposed_time: Bits
+}
+
+class UnifiedDatapath_wrapper
+    extends UnifiedDatapath(p = RaytracerParams(false, true, None))
+    with WithExposedTime {
+  val exposed_time = expose(_time)
+}
+
+class UnifiedDatapath_wrapper_16
+    extends UnifiedDatapath(p = RaytracerParams(false, true, Some(16)))
+    with WithExposedTime {
+  import hardfloat._
+  val exposed_time = expose(_time)
+  // val exposed_stage_10_accum = expose(stage_10_norm_accum)
+  // val exposed_stage_9_norm = expose(stage_9_norm_sum)
+  // val exposed_stage_4_vec_b = expose(stage_4_vec_b)
+  // val exposed_stage_5_vec_b = expose(stage_5_vec_b)
+  // val exposed_stage_6_vec_b = expose(stage_6_vec_b)
+  // val exposed_stage_7_vec_b = expose(stage_7_vec_b)
+}
+
 
 class Datapath_test_for_vcd extends AnyFreeSpec with ChiselScalatestTester {
 
