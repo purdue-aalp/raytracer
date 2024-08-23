@@ -2,6 +2,7 @@ Mill is the preferred means of building
 
 # How to run the test bench
 mill raytracer.test.testOnly baseline_datapath.Datapath_test_for_vcd
+sbt test:testOnly baseline_datapath.Datapath_test_for_vcd
 
 # current problems
 - Datapath_test.scala cannot go through all tests in a single run because the

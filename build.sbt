@@ -11,7 +11,7 @@ lazy val root = (project in file("."))
     name := "raytracer",
     libraryDependencies ++= Seq(
       "org.chipsalliance" %% "chisel" % chiselVersion,
-      "edu.berkeley.cs" %% "chiseltest" % "5.0.0" % "test",
+      "edu.berkeley.cs" %% "chiseltest" % "5.0.2" % "test",
       // "edu.berkeley.cs" % "hardfloat_2.12" % "1.2.4"
     ),
     scalacOptions ++= Seq(
