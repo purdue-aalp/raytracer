@@ -47,21 +47,19 @@ class UnifiedDatapath_wrapper_16
   val exposed_time = expose(_time)
 }
 
-
 class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
-  
-/**
-  * Contents:
-    - Knobs for simulation
-    - Necessary definitions
-    - Testbench Routines
-    - Helper Routines for testbench
-  */
+
+  /** Contents:
+    * \- Knobs for simulation
+    * \- Necessary definitions
+    * \- Testbench Routines
+    * \- Helper Routines for testbench
+    */
 
   ///////////////////////////
   // Knobs for simulation  //
   ///////////////////////////
-  
+
   // Not enabling euclidean/angular mode
   val test_baseline_ray_box_random = true
   val test_baseline_ray_triangle_random = true
@@ -82,17 +80,17 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   // "gold" results
   val float_tolerance_error =
     0.001 // normalized error: 149 vs 100 would have an error of 0.49
-  
-  // Dump a vcd file for unified tests. 
+
+  // Dump a vcd file for unified tests.
   // If you expect to get one vcd file for each test, better comment-out the
   // TargetDirAnnotation setting below, or only run one test at a time. Otherwise, tests that use the same
-  // Verilator model will overwrite the vcd file of previous tests. 
+  // Verilator model will overwrite the vcd file of previous tests.
   val dump_vcd_for_unified_test = false
 
   // More configurations for the test
   def chisel_test_annotations(description: String) = Seq(
     // Use Verilator as simulation backend. Make sure it's in PATH!
-    VerilatorBackendAnnotation, 
+    VerilatorBackendAnnotation,
 
     // Don't regenerate the same Verilator model for each test
     CachingAnnotation,
@@ -104,7 +102,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     TargetDirAnnotation(
       s"cached_verilator_backend/${description.replaceAll("[^0-9a-zA-Z]", "_")}"
     ),
-    
+
     // To get better performance from the Verilator model
     VerilatorCFlags(Seq("-Os", "-march=native")),
     VerilatorLinkFlags(Seq("-Os", "-march=native")),
@@ -236,7 +234,6 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     )
   }
 
-
   ///////////////////////////
   // Testbench Routines    //
   ///////////////////////////
@@ -260,7 +257,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
     test(new UnifiedDatapath_wrapper_16)
       .withAnnotations(
-        chisel_test_annotations("euclidean"+true.toString()) :++ {
+        chisel_test_annotations("euclidean" + true.toString()) :++ {
           if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }
           else { Nil }
         }
@@ -327,7 +324,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
     test(new UnifiedDatapath_wrapper_16)
       .withAnnotations(
-        chisel_test_annotations("euclidean"+true.toString()) :++ {
+        chisel_test_annotations("euclidean" + true.toString()) :++ {
           if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }
           else { Nil }
         }
@@ -462,7 +459,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
       test(gen_baseline_or_extended_datapath(extended))
         .withAnnotations(
-          chisel_test_annotations("euclidean"+extended.toString()) :++ {
+          chisel_test_annotations("euclidean" + extended.toString()) :++ {
             if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }
             else { Nil }
           }
@@ -498,7 +495,6 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     }
   }
 
-
   //////////////////////////////////////
   // Helper Routines for testbench    //
   //////////////////////////////////////
@@ -507,7 +503,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     case true  => new UnifiedDatapath_wrapper_16
     case false => new UnifiedDatapath_wrapper
   }
-  
+
   def check_raybox_result(
       input_no: Int,
       sw_result: SW_RayBox_Result,
@@ -609,4 +605,3 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     t_error
   }
 }
-
