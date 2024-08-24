@@ -49,43 +49,63 @@ class UnifiedDatapath_wrapper_16
 
 
 class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
+  
+/**
+  * Contents:
+    - Knobs for simulation
+    - Necessary definitions
+    - Testbench Routines
+    - Helper Routines for testbench
+  */
 
-  // we are dealing with hardware and software Ray types
-  type HW_Ray = raytracer_datapath.Ray
-  type HW_Box = raytracer_datapath.AABB
-
-  val r = new Random()
-  val N_RANDOM_TEST = 100
-  val PRINT_END_TIME = true
-  val float_tolerance_error =
-    0.001 // normalized error: 149 vs 100 would have an error of 0.49
-  val dump_vcd_for_unified_test = false
-
+  ///////////////////////////
+  // Knobs for simulation  //
+  ///////////////////////////
+  
+  // Not enabling euclidean/angular mode
   val test_baseline_ray_box_random = true
   val test_baseline_ray_triangle_random = true
+
+  // Enables euclidean/angular mode
   val test_extended_euclidean_random = true
   val test_extended_angular_random = true
   val test_extended_ray_box_random = true
   val test_extended_ray_triangle_random = true
 
-  val default_vec_a = SW_Vector((0 until 16).toList.map(_.toFloat))
-  val default_vec_b = SW_Vector((16 until 0 by -1).toList.map(_.toFloat))
-  val empty_vec_a = SW_Vector(Nil)
-  val empty_vec_b = SW_Vector(Nil)
+  // Random test count
+  val N_RANDOM_TEST = 100
 
-  def gen_baseline_or_extended_datapath(extended: Boolean) = extended match {
-    case true  => new UnifiedDatapath_wrapper_16
-    case false => new UnifiedDatapath_wrapper
-  }
+  // Print how many cycles had been simulated after each test
+  val PRINT_END_TIME = true
 
+  // We don't want the FP results to deviate more than this much from the SW
+  // "gold" results
+  val float_tolerance_error =
+    0.001 // normalized error: 149 vs 100 would have an error of 0.49
+  
+  // Dump a vcd file for unified tests. 
+  // If you expect to get one vcd file for each test, better comment-out the
+  // TargetDirAnnotation setting below, or only run one test at a time. Otherwise, tests that use the same
+  // Verilator model will overwrite the vcd file of previous tests. 
+  val dump_vcd_for_unified_test = false
+
+  // More configurations for the test
   def chisel_test_annotations(description: String) = Seq(
-    VerilatorBackendAnnotation,
+    // Use Verilator as simulation backend. Make sure it's in PATH!
+    VerilatorBackendAnnotation, 
+
+    // Don't regenerate the same Verilator model for each test
     CachingAnnotation,
+
+    // Print debug info for caching
     // CachingDebugAnnotation,
+
+    // Where to cache the Verilator model
     TargetDirAnnotation(
       s"cached_verilator_backend/${description.replaceAll("[^0-9a-zA-Z]", "_")}"
     ),
-    // WriteVcdAnnotation,
+    
+    // To get better performance from the Verilator model
     VerilatorCFlags(Seq("-Os", "-march=native")),
     VerilatorLinkFlags(Seq("-Os", "-march=native")),
     VerilatorFlags(Seq("-O3", "--threads", "16"))
@@ -94,6 +114,25 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     ThrowOnFirstErrorAnnotation,
     PrintFullStackTraceAnnotation
   )
+
+  //////////////////////////////
+  // Necessary definitions    //
+  //////////////////////////////
+
+  // we are dealing with hardware and software Ray types
+  type HW_Ray = raytracer_datapath.Ray
+  type HW_Box = raytracer_datapath.AABB
+
+  val r = new Random()
+
+  val default_vec_a = SW_Vector((0 until 16).toList.map(_.toFloat))
+  val default_vec_b = SW_Vector((16 until 0 by -1).toList.map(_.toFloat))
+  val empty_vec_a = SW_Vector(Nil)
+  val empty_vec_b = SW_Vector(Nil)
+
+  //////////////////
+  // Test suites  //
+  //////////////////
 
   // randomized tests
   val box_seq_for_raybox = List.fill(N_RANDOM_TEST) {
@@ -197,106 +236,10 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     )
   }
 
-  def check_raybox_result(
-      input_no: Int,
-      sw_result: SW_RayBox_Result,
-      hw_result: UnifiedDatapathOutput
-  ) = {
-    val input_box_status =
-      Map(
-        sw_result.t_min
-          .zip(sw_result.is_intersect)
-          .zip(sw_result.box_index)
-          .map { case ((t, isint), boxidx) =>
-            (boxidx, (t, isint))
-          }: _*
-      )
 
-    // traverse the four elements of actual output, verify their
-    // ordering is correct, and they match with what the software gold
-    // result predicts
-    val error_string_obj = new AnyRef {
-      lazy val o = hw_result.peek()
-      override def toString: String = {
-        s"input #${input_no}\nactual tmin: ${o.tmin_out.map(bitsToFloat(_))}\n" + s"actual intersect: ${o.isIntersect
-            .map(_.litValue)}\n" + s"actual boxidx: ${o.boxIndex.map(_.litValue)}\n" + s"Predicted: ${sw_result}"
-      }
-    }
-
-    var has_seen_non_intersect = false
-    var so_far_largest_tmin = 0.0f
-    for (idx <- 0 until 4) {
-      val actual_tmin = bitsToFloat(hw_result.tmin_out(idx).peek())
-      val actual_is_intersect =
-        hw_result.isIntersect(idx).peek().litToBoolean
-      val actual_box_idx =
-        hw_result.boxIndex(idx).peek().litValue.intValue
-
-      // check t value monotonicity (use scala.Predef.assert instead of
-      // scalatest.assert so we can call error_string by-name)
-      assert(actual_tmin >= so_far_largest_tmin, error_string_obj)
-
-      // check intersects go before non-intersects
-      assert(
-        !has_seen_non_intersect || (has_seen_non_intersect && !actual_is_intersect),
-        error_string_obj
-      )
-
-      // checkout HW and SW yields the same opinion on intersection
-      assert(
-        input_box_status(actual_box_idx)._2 == actual_is_intersect,
-        error_string_obj
-      )
-
-      // check HW and SW yields the same intersect t value for each
-      // box, if intersection is true
-      if (actual_is_intersect) {
-        val normalized_tmin_error = if (actual_tmin != 0.0f) {
-          abs(
-            input_box_status(actual_box_idx)._1 - actual_tmin
-          ) / actual_tmin
-        } else { input_box_status(actual_box_idx)._1 }
-        assert(
-          normalized_tmin_error <= float_tolerance_error,
-          error_string_obj
-        )
-      }
-
-      if (!has_seen_non_intersect && !actual_is_intersect) {
-        has_seen_non_intersect = true
-      }
-
-      so_far_largest_tmin = actual_tmin
-    }
-
-  }
-
-  def check_raytriangle_result(
-      input_no: Int,
-      sw_result: SW_RayTriangle_Result,
-      hw_result: UnifiedDatapathOutput
-  ): Float = {
-    val hw_t_num: Float = bitsToFloat(hw_result.t_num.peek())
-    val hw_t_denom: Float = bitsToFloat(hw_result.t_denom.peek())
-    val hw_hit: Boolean =
-      hw_result.triangle_hit.peek().litToBoolean
-
-    val error_msg_obj = new AnyRef {
-      lazy val message =
-        f"Input #${input_no}: ${input_no},\n predicted output: ${sw_result}, \n actual output: t_num=${hw_t_num}, t_denom=${hw_t_denom}, hit=${hw_hit}\n"
-      override def toString: String = message
-    }
-
-    var t_error = 0.0f
-    assert(hw_hit == sw_result.is_hit, error_msg_obj)
-    if (sw_result.is_hit) {
-      val hw_t = hw_t_num / hw_t_denom
-      val sw_t = sw_result.t_num / sw_result.t_denom
-      t_error = abs(hw_t - sw_t) / sw_t
-    }
-
-    t_error
-  }
+  ///////////////////////////
+  // Testbench Routines    //
+  ///////////////////////////
 
   def testEuclidean(
       description: String,
@@ -554,4 +497,116 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
     }
   }
+
+
+  //////////////////////////////////////
+  // Helper Routines for testbench    //
+  //////////////////////////////////////
+
+  def gen_baseline_or_extended_datapath(extended: Boolean) = extended match {
+    case true  => new UnifiedDatapath_wrapper_16
+    case false => new UnifiedDatapath_wrapper
+  }
+  
+  def check_raybox_result(
+      input_no: Int,
+      sw_result: SW_RayBox_Result,
+      hw_result: UnifiedDatapathOutput
+  ) = {
+    val input_box_status =
+      Map(
+        sw_result.t_min
+          .zip(sw_result.is_intersect)
+          .zip(sw_result.box_index)
+          .map { case ((t, isint), boxidx) =>
+            (boxidx, (t, isint))
+          }: _*
+      )
+
+    // traverse the four elements of actual output, verify their
+    // ordering is correct, and they match with what the software gold
+    // result predicts
+    val error_string_obj = new AnyRef {
+      lazy val o = hw_result.peek()
+      override def toString: String = {
+        s"input #${input_no}\nactual tmin: ${o.tmin_out.map(bitsToFloat(_))}\n" + s"actual intersect: ${o.isIntersect
+            .map(_.litValue)}\n" + s"actual boxidx: ${o.boxIndex.map(_.litValue)}\n" + s"Predicted: ${sw_result}"
+      }
+    }
+
+    var has_seen_non_intersect = false
+    var so_far_largest_tmin = 0.0f
+    for (idx <- 0 until 4) {
+      val actual_tmin = bitsToFloat(hw_result.tmin_out(idx).peek())
+      val actual_is_intersect =
+        hw_result.isIntersect(idx).peek().litToBoolean
+      val actual_box_idx =
+        hw_result.boxIndex(idx).peek().litValue.intValue
+
+      // check t value monotonicity (use scala.Predef.assert instead of
+      // scalatest.assert so we can call error_string by-name)
+      assert(actual_tmin >= so_far_largest_tmin, error_string_obj)
+
+      // check intersects go before non-intersects
+      assert(
+        !has_seen_non_intersect || (has_seen_non_intersect && !actual_is_intersect),
+        error_string_obj
+      )
+
+      // checkout HW and SW yields the same opinion on intersection
+      assert(
+        input_box_status(actual_box_idx)._2 == actual_is_intersect,
+        error_string_obj
+      )
+
+      // check HW and SW yields the same intersect t value for each
+      // box, if intersection is true
+      if (actual_is_intersect) {
+        val normalized_tmin_error = if (actual_tmin != 0.0f) {
+          abs(
+            input_box_status(actual_box_idx)._1 - actual_tmin
+          ) / actual_tmin
+        } else { input_box_status(actual_box_idx)._1 }
+        assert(
+          normalized_tmin_error <= float_tolerance_error,
+          error_string_obj
+        )
+      }
+
+      if (!has_seen_non_intersect && !actual_is_intersect) {
+        has_seen_non_intersect = true
+      }
+
+      so_far_largest_tmin = actual_tmin
+    }
+
+  }
+
+  def check_raytriangle_result(
+      input_no: Int,
+      sw_result: SW_RayTriangle_Result,
+      hw_result: UnifiedDatapathOutput
+  ): Float = {
+    val hw_t_num: Float = bitsToFloat(hw_result.t_num.peek())
+    val hw_t_denom: Float = bitsToFloat(hw_result.t_denom.peek())
+    val hw_hit: Boolean =
+      hw_result.triangle_hit.peek().litToBoolean
+
+    val error_msg_obj = new AnyRef {
+      lazy val message =
+        f"Input #${input_no}: ${input_no},\n predicted output: ${sw_result}, \n actual output: t_num=${hw_t_num}, t_denom=${hw_t_denom}, hit=${hw_hit}\n"
+      override def toString: String = message
+    }
+
+    var t_error = 0.0f
+    assert(hw_hit == sw_result.is_hit, error_msg_obj)
+    if (sw_result.is_hit) {
+      val hw_t = hw_t_num / hw_t_denom
+      val sw_t = sw_result.t_num / sw_result.t_denom
+      t_error = abs(hw_t - sw_t) / sw_t
+    }
+
+    t_error
+  }
 }
+

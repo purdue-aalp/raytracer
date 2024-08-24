@@ -1,15 +1,14 @@
-Mill is the preferred means of building
+The code in this project was tested with sbt version 1.8 or mill version 0.10.12.
 
 # How to run the test bench
+Test top module only.
+```
 mill raytracer.test.testOnly raytracer_datapath.Datapath_test
 sbt test:testOnly raytracer_datapath.Datapath_test
+```
 
+Test top module as well as individual components.
+```
 mill raytracer.test
 sbt test
-
-# current problems
-- Datapath_test.scala cannot go through all tests in a single run because the
-verilator model for two different DUTs have a hash collision
-- Datapath_test.scala creates a separate verilator model for each test,
-  which negates the point of caching.
-- EmitVerilog fails with "Exception in thread "main" circt.stage.phases.Exceptions$FirtoolNonZeroExitCode: firtool returned a non-zero exit code. Note that this version of Chisel (5.0.0) was published against firtool version 1.40.0."
+```
