@@ -2,8 +2,8 @@ package raytracer_datapath
 
 import chisel3._
 
-/** Flip the sign bit (MSB) for a floating point or recorded flating point
-  * nnumber alike. They both use the MSB to represent sign.
+/** Flip the sign bit (MSB) for a floating point or recorded floating point
+  * number alike. They both use the MSB to represent sign.
   */
 object FNFlipSign {
   def apply(in: Bits): Bits = {
