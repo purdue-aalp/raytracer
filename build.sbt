@@ -1,4 +1,6 @@
-// See README.md for license details.
+// This file is part of raytracer_chisel.
+// Licensed under the BSD 3-clause License.
+// See the LICENSE.txt file for details.
 
 ThisBuild / scalaVersion     := "2.13.8"
 ThisBuild / version          := "0.1.0"

@@ -1,3 +1,7 @@
+// This file is part of raytracer_chisel.
+// Licensed under the BSD 3-clause License.
+// See the LICENSE.txt file for details.
+
 package raytracer_datapath.raytracer_gold
 
 import scala.math._
