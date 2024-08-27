@@ -1187,6 +1187,12 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     s.intake :<>= w
     s.emit
   }
+  
+  // Need to specify some value for this input signal otherwise the FIRRTL
+  // compiler will complain of a "not fully initialized" error.
+  // However, this assignment will either be overwritten below (if this is
+  // exactly the last meaningful stage), or be optimized away (if this is a
+  // stage beyond the stage from which we tap the output)
   _last_stage_emit_port.ready := true.B
   
   // now that all stages are chained up, overwrite the first stage
@@ -1225,8 +1231,8 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   // TAP OUTPUT FROM LAST MEANINGFUL STAGE'S OUTPUT BUFFER
   /////////////////////////
 
-  // the output stage also contains special logic: to convert RecFN to FN
-  val output_stage = Module(
+  // the pre-output stage contains special logic: to convert RecFN to FN
+  val pre_output_conv_stage = Module(
     GenerializedSkidBufferStage(
       new ExtendedPipelineBundle(p),
       new EnhancedOutputBundle(p),
@@ -1264,8 +1270,16 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
         output
       }
     )
-  ).suggestName("stage_for_output")
+  ).suggestName("stage_for_pre_output_conv")
 
-  output_stage.intake :<>= stage_modules(10).emit
+  // the output stage is simply a skid buffer
+  val output_stage = Module(
+    SkidBufferStage(
+      new EnhancedOutputBundle(p)
+    )
+  ).suggestName(("stage_for_output"))
+
+  pre_output_conv_stage.intake :<>= stage_modules(10).emit
+  output_stage.intake :<>= pre_output_conv_stage.emit
   out :<>= output_stage.emit
 }
