@@ -58,7 +58,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     Decoupled(new EnhancedOutputBundle(p))
   )
 
-  // A cycle counter, that we can use when debugging the module
+  // A cycle counter which we can use when debugging the module
   // It shall disappear in synthesis, so no PPA impact (provided we don't expose
   // _time when instantiating the top-level module)
   val (_time, _) = Counter(true.B, (1 << 31) - 1)
@@ -83,7 +83,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   // Below, the dataflow logic is specified. The stage control is implemented by
   // GeneralizedSkidBufferStage.
 
-  // Each element of this array is an Option, that wraps a function object which
+  // Each element of this array is an Option, which wraps a function object that
   // maps an input ExtendedPipelineBundle to an output ExtendedPipelineBundle
   val stage_functions = collection.mutable.ArrayBuffer.fill[Option[
     ExtendedPipelineBundle => ExtendedPipelineBundle
@@ -91,14 +91,13 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
 
   // Define the functions!
   // stage 0 does not exist
-  // stage 1 also doesn't exist, but kept for consistenty
-  // stage 2 converts float32 to float33 (specified separately at the bottom, because the
+  // stage 1 converts float32 to float33 (specified separately at the bottom, because the
   // function signature is different)
 
-  // stage 3 performs 24 adds for ray-box, or 9 adds for ray-triangle, to
+  // stage 2 performs 24 adds for ray-box, or 9 adds for ray-triangle, to
   // translate the geometries to the origin of the ray, or 16 adds for euclidean
   // to find the element-wise difference
-  stage_functions(3) = Some({ intake =>
+  stage_functions(2) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
 
     // By default, copy the input. Code below overwrites fields of the bundle.
@@ -272,12 +271,12 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     emit
   })
 
-  // stage 4 performs 24 muls for ray-box to find out the time intersection
+  // stage 3 performs 24 muls for ray-box to find out the time intersection
   // intervals, or 9 mul for ray-triangle to perform the multiplication step of shearing and scaling of
   // triangle vertices, or 16 muls for euclidean to calculate the square of
   // diffs, or 16 muls for angular to calculate the element-wise product between
   // query point and candidate point, and the query point and itself.
-  stage_functions(4) = Some({ intake =>
+  stage_functions(3) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
@@ -457,11 +456,11 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     emit
   })
 
-  // stage 5 performs 6 adds for ray-triangle to perform the addition step of
+  // stage 4 performs 6 adds for ray-triangle to perform the addition step of
   // shearing and scaling of triangle vertices, 12 CAS and 4 comparisons for ray-box
   // intersection to identify intersecting boxes, or 8 adds for euclidean to
   // reduce the partial sums, or 8 adds for angular to reduce the partial sums
-  stage_functions(5) = Some({ intake =>
+  stage_functions(4) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
@@ -680,9 +679,9 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     emit
   })
 
-  // stage 6 performs 6 muls for ray-triangle test to figure out the minuends and
+  // stage 5 performs 6 muls for ray-triangle test to figure out the minuends and
   // subtrahends of U, V, W
-  stage_functions(6) = Some({ intake =>
+  stage_functions(5) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
     switch(intake.opcode) {
@@ -733,9 +732,9 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     emit
   })
 
-  // stage 7 performs 3 adds for ray-triangle test to find the value of U, V, W,
+  // stage 6 performs 3 adds for ray-triangle test to find the value of U, V, W,
   // or 4 adds for euclidean, or 4 adds for angular
-  stage_functions(7) = Some({ intake =>
+  stage_functions(6) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
@@ -837,8 +836,8 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     emit
   })
 
-  // stage 8 calculates U*Az, V*Bz and W*Cz for ray-triangle test
-  stage_functions(8) = Some({ intake =>
+  // stage 7 calculates U*Az, V*Bz and W*Cz for ray-triangle test
+  stage_functions(7) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
     switch(intake.opcode) {
@@ -878,9 +877,9 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     emit
   })
 
-  // stage 9 does two adds for ray-triangle test to find out the partial sum for
+  // stage 8 does two adds for ray-triangle test to find out the partial sum for
   // t_denom and t_num, or two adds for euclidean, or two adds for angular
-  stage_functions(9) = Some({ intake =>
+  stage_functions(8) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
@@ -969,10 +968,10 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     emit
   })
 
-  // stage 10 performs two adds for ray-triangle test, to complete the summation
+  // stage 9 performs two adds for ray-triangle test, to complete the summation
   // of t_denom and t_num, or a single add for euclidean, or two accumulations
   // for angular
-  stage_functions(10) = Some({ intake =>
+  stage_functions(9) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
@@ -1068,11 +1067,11 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     emit
   })
 
-  // stage 11 performs 2 quad-sort ray-box
+  // stage 10 performs 2 quad-sort ray-box
   // intersection to sort the order of intersections; or 5
   // comparisons for ray-triangle test to determine validity of intersection; or
   // one add for euclidean to accumulate total sum
-  stage_functions(11) = Some({ intake =>
+  stage_functions(10) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
@@ -1180,8 +1179,8 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
 
   // Chain up the stages and (literally) tie the loose end.
   // We feed all-zero to stage 0. It's okay, because we will be overriding
-  // the connections by routing the module input to stage_2_actual, and route
-  // stage_2_actual to stage 3
+  // the connections by routing the module input to stage_1_actual, and route
+  // stage_1_actual to stage 2
   val _last_stage_emit_port = stage_modules.foldLeft(
     WireDefault(0.U.asTypeOf(Decoupled(new ExtendedPipelineBundle(p))))
   ) { case (w, s) =>
@@ -1190,10 +1189,9 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   }
   _last_stage_emit_port.ready := true.B
   
-  // now that all stages are chained up, overwrite the first few stages
-  // stage 1 is deprecated, since we have skid buffers now
-  // stage 2 converts FN to RecFN, so we need a more generic SkidBufferStage
-  val stage_2_actual_module = Module(
+  // now that all stages are chained up, overwrite the first stage
+  // stage 1 converts FN to RecFN, so we need a more generic SkidBufferStage
+  val stage_1_actual_module = Module(
     GenerializedSkidBufferStage(
       new EnhancedInputBundle(p),
       new ExtendedPipelineBundle(p),
@@ -1218,10 +1216,10 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
         output
       }
     )
-  ).suggestName(s"stage_2_actual")
+  ).suggestName(s"stage_1_actual")
 
-  stage_2_actual_module.intake :<>= in
-  stage_modules(3).intake :<>= stage_2_actual_module.emit
+  stage_1_actual_module.intake :<>= in
+  stage_modules(2).intake :<>= stage_1_actual_module.emit
 
   ////////////////////////
   // TAP OUTPUT FROM LAST MEANINGFUL STAGE'S OUTPUT BUFFER
@@ -1268,6 +1266,6 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     )
   ).suggestName("stage_for_output")
 
-  output_stage.intake :<>= stage_modules(11).emit
+  output_stage.intake :<>= stage_modules(10).emit
   out :<>= output_stage.emit
 }
