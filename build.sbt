@@ -1,4 +1,4 @@
-// This file is part of raytracer_chisel.
+// This file is part of raytracer.
 // Licensed under the BSD 3-clause License.
 // See the LICENSE.txt file for details.
 
