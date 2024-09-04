@@ -2,6 +2,9 @@ name: Continuous Integration
 
 on: [push, pull_request]
 
+env:
+  VERILATOR_VER: "v4.210"
+
 jobs:
   ci:
     name: ci
@@ -21,7 +24,28 @@ jobs:
           mill-version: 0.10.12
       - name: Cache Scala
         uses: coursier/cache-action@v5
-      - name: SBT Test
-        run: sbt test
+      - name: Get Cached Verilator
+        id: get_cached_verilator
+        uses: actions/cache@v4
+        with:
+          path: verilator
+          key: ${{ runner.os }}-verilator-${{ env.VERILATOR_VER }}
+      - name: setup-verilator
+        id: setup_verilator
+        if: steps.get_cached_verilator.outputs.cache-hit != 'true'
+        uses: v0xnihili/install-verilator-action@main
+        with:
+          version: ${{ env.VERILATOR_VER }}
+      - name: install-verilator
+        id: install_verilator
+        if: steps.get_cached_verilator.outputs.cache-hit == 'true'
+        run: |
+          cd verilator
+          sudo make install
+      #- name: SBT Test
+      #  run: sbt test
       - name: mill Test
         run: mill _.test
+      - name: Display error file content
+        if: failure()
+        run: cat /home/runner/work/raytracer/raytracer/hs_err_pid*.log
