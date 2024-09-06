@@ -91,6 +91,8 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   // Verilator model will overwrite the vcd file of previous tests.
   val dump_vcd_for_unified_test = false
 
+  val cores: Int = Runtime.getRuntime.availableProcessors()
+
   // More configurations for the test
   def chisel_test_annotations(description: String) = Seq(
     // Use Verilator as simulation backend. Make sure it's in PATH!
@@ -110,7 +112,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
     // To get better performance from the Verilator model
     VerilatorCFlags(Seq("-Os", "-march=native")),
     VerilatorLinkFlags(Seq("-Os", "-march=native")),
-    VerilatorFlags(Seq("-O3", "--threads", "16"))
+    VerilatorFlags(Seq("-O3", "--threads", s"${cores}"))
   )
   val chisel_test_chisel_annotations = Seq(
     ThrowOnFirstErrorAnnotation,
