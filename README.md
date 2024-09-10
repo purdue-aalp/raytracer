@@ -1,4 +1,4 @@
-The code in this project was tested with sbt version 1.8 or mill version 0.10.12.
+The code in this project was tested with verilator version 4.038 and sbt version 1.8 or mill version 0.10.12.
 
 # Prerequisites
 - verilator (for running the testbenches)
