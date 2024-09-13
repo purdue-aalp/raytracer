@@ -1,8 +1,6 @@
 
 # Documentation
-The Ray Tracer Datapath is documented in our arXiv article: [A
-Hardware Ray Tracer Datapath with Generalized
-Features](https://arxiv.org/abs/2409.06000) where the following are discussed:
+A documentation for the Ray Tracer Datapath can be found in a PDF file in the release where the following are discussed:
 - Supported operations
 - IO specification
 - Configurable parameters
@@ -37,3 +35,16 @@ or
 ```
 sbt test
 ```
+
+# Citation
+This RTL project was developed as part of a more significant research project. If you use the RTL modules in this repo please consider citing:
+```
+Aaron Barnes, Fangjia Shen, Timothy G. Rogers,
+Extending GPU Ray-Tracing Units for Hierarchical Search Acceleration,
+in 2024 57th IEEE/ACM International Symposium on Microarchitecture (MICRO)
+```
+
+# Contact
+Aaron Barnes (barnes88@purdue.edu)
+
+Fangjia Shen (shen449@purdue.edu)
