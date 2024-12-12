@@ -22,10 +22,10 @@ object raytracer extends  SbtModule { m =>
     "-P:chiselplugin:genBundleElements"
   )
   override def ivyDeps = Agg(
-    ivy"org.chipsalliance::chisel:5.0.0",
+    ivy"org.chipsalliance::chisel:5.3.0",
   )
   override def scalacPluginIvyDeps = Agg(
-    ivy"org.chipsalliance:::chisel-plugin:5.0.0",
+    ivy"org.chipsalliance:::chisel-plugin:5.3.0",
   )
 
   def sources = T.sources{
