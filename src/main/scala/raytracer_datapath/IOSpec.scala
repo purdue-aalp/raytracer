@@ -7,20 +7,23 @@ package raytracer_datapath
 import chisel3._
 import hardfloat.{recFNFromFN, fNFromRecFN}
 
+/// One-hot encoding
 object UnifiedDatapathOpCode extends ChiselEnum {
+  val Nop = Value(0x0.U)
+
   /// Ray -Triangle test
-  val OpTriangle = Value
+  val OpTriangle = Value(0x1.U)
 
   /// Ray-Box tests for four boxes
-  val OpQuadbox = Value
+  val OpQuadbox = Value(0x2.U)
 
   /// Calculate the sum-of-squares of the element-wise difference bewteen two
   /// FP32 vectors
-  val OpEuclidean = Value
+  val OpEuclidean = Value(0x4.U)
 
   /// Calculate the dot product between a query point and a candidate point, and
   /// the squared magnitude of the candidate point.
-  val OpAngular = Value
+  val OpAngular = Value(0x8.U)
 }
 
 class Float3(recorded_float: Boolean = false) extends Bundle {

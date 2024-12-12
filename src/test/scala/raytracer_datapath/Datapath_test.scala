@@ -91,7 +91,8 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   // Verilator model will overwrite the vcd file of previous tests.
   val dump_vcd_for_unified_test = false
 
-  val cores: Int = Runtime.getRuntime.availableProcessors()
+  val cores: Int = 18
+  // val cores: Int = Runtime.getRuntime.availableProcessors()
 
   // More configurations for the test
   def chisel_test_annotations(description: String) = Seq(

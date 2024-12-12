@@ -100,6 +100,10 @@ object RaytracerTestHelper {
     val op = rb.opcode
     assert(sw_box.length == 4)
 
+    // verify the op is legal
+    val (_, valid) = UnifiedDatapathOpCode.safe(op.id.U)
+    assert(valid.litToBoolean)
+
     lazy val dummy_crbtb = new CombinedRayBoxTriangleBundle(false)
     lazy val dummy_aabb = new AABB(false)
 
@@ -185,6 +189,10 @@ object RaytracerTestHelper {
     val sw_box = sw_data.boxes
     val sw_triangle = sw_data.triangle
     val op = sw_data.opcode
+
+    // verify the op is legal
+    val (_, valid) = UnifiedDatapathOpCode.safe(op.id.U)
+    assert(valid.litToBoolean)
 
     // if 0 means no euclidean is supported
     val vec_elements = sw_data.element_count.getOrElse(0)

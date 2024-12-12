@@ -19,7 +19,15 @@ case class RaytracerParams(
     internal_recorded_float: Boolean = true,
 
     // No euclidean support if None, else supports processing X dimensions per cycle given Some(X)
-    support_euclidean: Option[Int] = None
+    support_euclidean: Option[Int] = None,
+
+    /**
+      *  when set to true, two changes will happen:
+        (1) Each op use its own functional unit. In other words, no FU is shared
+        between any two op modes
+        (2) Operations with fewer steps will skip the "idle" stages.
+      */
+    disjoint_pipes: Boolean = false,
 )
 
 object DatapathConstants {

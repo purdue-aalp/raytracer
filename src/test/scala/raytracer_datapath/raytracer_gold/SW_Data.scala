@@ -6,12 +6,13 @@ package raytracer_datapath.raytracer_gold
 
 import scala.math._
 import scala.util.Random
+import raytracer_datapath.UnifiedDatapathOpCode.OpTriangle
 object SW_Opcode extends Enumeration {
   type SW_Opcode = Value
-  val SW_OpTriangle = Value(0)
-  val SW_OpQuadbox = Value(1)
-  val SW_OpEuclidean = Value(2)
-  val SW_OpAngular = Value(3)
+  val SW_OpTriangle = Value(1)
+  val SW_OpQuadbox = Value(2)
+  val SW_OpEuclidean = Value(4)
+  val SW_OpAngular = Value(8)
 }
 
 import SW_Opcode._
