@@ -161,9 +161,23 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           intake.ray.origin.z
         )
 
-        assert(_dest.length <= fu_list.length)
+        val op_fu_list = if(!p.disjoint_pipes){
+          fu_list
+        } else {
+          List.fill(_dest.length) {
+            val fu = Module(new AddRecFN(8, 24))
+            fu.io.a := 0.U
+            fu.io.b := 0.U
+            fu.io.detectTininess := _tininess_rule
+            fu.io.roundingMode := _rounding_rule
+            fu.io.subOp := false.B
+            fu
+          }
+        }
 
-        (_dest zip _src1 zip _src2 zip fu_list) foreach {
+        assert(_dest.length <= op_fu_list.length)
+
+        (_dest zip _src1 zip _src2 zip op_fu_list) foreach {
           case (((_1, _2), _3), fu) =>
             fu.io.subOp := true.B
             fu.io.a := _2
@@ -214,9 +228,23 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           )
         }
 
-        assert(_dest.length <= fu_list.length)
+        val op_fu_list = if(!p.disjoint_pipes){
+          fu_list
+        } else {
+          List.fill(_dest.length) {
+            val fu = Module(new AddRecFN(8, 24))
+            fu.io.a := 0.U
+            fu.io.b := 0.U
+            fu.io.detectTininess := _tininess_rule
+            fu.io.roundingMode := _rounding_rule
+            fu.io.subOp := false.B
+            fu
+          }
+        }
 
-        (_dest zip _src1 zip _src2 zip fu_list) foreach {
+        assert(_dest.length <= op_fu_list.length)
+
+        (_dest zip _src1 zip _src2 zip op_fu_list) foreach {
           case (((_1, _2), _3), fu) =>
             fu.io.subOp := true.B
             fu.io.a := _2
@@ -236,10 +264,25 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val _src1 = intake.vec_a.getElements
           val _src2 = intake.vec_b.getElements
           val _mask = intake.vec_mask(0).asBools
-          assert(_dest.length <= fu_list.length)
+
+          val op_fu_list = if(!p.disjoint_pipes){
+            fu_list
+          } else {
+            List.fill(_dest.length) {
+              val fu = Module(new AddRecFN(8, 24))
+              fu.io.a := 0.U
+              fu.io.b := 0.U
+              fu.io.detectTininess := _tininess_rule
+              fu.io.roundingMode := _rounding_rule
+              fu.io.subOp := false.B
+              fu
+            }
+          }
+
+          assert(_dest.length <= op_fu_list.length)
           assert(_mask.length == _dest.length)
 
-          (_src1 zip _src2 zip _dest zip fu_list zip _mask) foreach {
+          (_src1 zip _src2 zip _dest zip op_fu_list zip _mask) foreach {
             case ((((_1, _2), _3), fu), m) =>
               fu.io.subOp := true.B
               fu.io.a := _1
