@@ -327,7 +327,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   // triangle vertices, or 16 muls for euclidean to calculate the square of
   // diffs, or 16 muls for angular to calculate the element-wise product between
   // query point and candidate point, and the query point and itself.
-  stage_functions(3) = Some({ intake =>
+stage_functions(3) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
@@ -383,9 +383,22 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           intake.triangle.C.at(kz)
         )
 
-        assert(_dest.length <= fu_list.length)
+        val op_fu_list = if(!p.disjoint_pipes){
+          fu_list
+        } else {
+          List.fill(_dest.length) {
+            val fu = Module(new MulRecFN(8, 24))
+            fu.io.a := 0.U
+            fu.io.b := 0.U
+            fu.io.detectTininess := _tininess_rule
+            fu.io.roundingMode := _rounding_rule
+            fu
+          }
+        }
+
+        assert(_dest.length <= op_fu_list.length)
         // _dest = _src1 * _src2
-        (_src1 zip _src2 zip _dest zip fu_list).map {
+        (_src1 zip _src2 zip _dest zip op_fu_list).map {
           case (((_1, _2), _3), fu) =>
             fu.io.a := _1
             fu.io.b := _2
@@ -436,8 +449,21 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           )
         }
 
-        assert(_dest.length <= fu_list.length)
-        (_src1 zip _src2 zip _dest zip fu_list) foreach {
+        val op_fu_list = if(!p.disjoint_pipes){
+          fu_list
+        } else {
+          List.fill(_dest.length) {
+            val fu = Module(new MulRecFN(8, 24))
+            fu.io.a := 0.U
+            fu.io.b := 0.U
+            fu.io.detectTininess := _tininess_rule
+            fu.io.roundingMode := _rounding_rule
+            fu
+          }
+        }
+
+        assert(_dest.length <= op_fu_list.length)
+        (_src1 zip _src2 zip _dest zip op_fu_list) foreach {
           case (((_1, _2), _3), fu) =>
             fu.io.a := _1
             fu.io.b := _2
@@ -457,9 +483,23 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val _dest = emit.vec_a.getElements
           val _src1 = intake.vec_a.getElements
           val _src2 = _src1
-          assert(_dest.length <= fu_list.length)
 
-          (_src1 zip _src2 zip _dest zip fu_list) foreach {
+          val op_fu_list = if(!p.disjoint_pipes){
+            fu_list
+          } else {
+            List.fill(_dest.length) {
+              val fu = Module(new MulRecFN(8, 24))
+              fu.io.a := 0.U
+              fu.io.b := 0.U
+              fu.io.detectTininess := _tininess_rule
+              fu.io.roundingMode := _rounding_rule
+              fu
+            }
+          }
+
+          assert(_dest.length <= op_fu_list.length)
+
+          (_src1 zip _src2 zip _dest zip op_fu_list) foreach {
             case (((_1, _2), _3), fu) =>
               fu.io.a := _1
               fu.io.b := _2
@@ -493,7 +533,20 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
             angular_bundle.angular_candidate.getElements
           ).flatten
 
-          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+          val op_fu_list = if(!p.disjoint_pipes){
+            fu_list
+          } else {
+            List.fill(_dest.length) {
+              val fu = Module(new MulRecFN(8, 24))
+              fu.io.a := 0.U
+              fu.io.b := 0.U
+              fu.io.detectTininess := _tininess_rule
+              fu.io.roundingMode := _rounding_rule
+              fu
+            }
+          }
+
+          (_src1 zip _src2 zip _dest zip op_fu_list).foreach {
             case (((_1, _2), _3), fu) =>
               fu.io.a := _1
               fu.io.b := _2
@@ -511,7 +564,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   // shearing and scaling of triangle vertices, 12 CAS and 4 comparisons for ray-box
   // intersection to identify intersecting boxes, or 8 adds for euclidean to
   // reduce the partial sums, or 8 adds for angular to reduce the partial sums
-  stage_functions(4) = Some({ intake =>
+stage_functions(4) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
@@ -573,8 +626,22 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           intake.C.y
         )
 
-        assert(_dest.length <= fu_list.length)
-        (_src1 zip _src2 zip _dest zip fu_list).map {
+        val op_fu_list = if(!p.disjoint_pipes){
+          fu_list
+        } else {
+          List.fill(_dest.length) {
+            val fu = Module(new AddRecFN(8, 24))
+            fu.io.a := 0.U
+            fu.io.b := 0.U
+            fu.io.detectTininess := _tininess_rule
+            fu.io.roundingMode := _rounding_rule
+            fu.io.subOp := false.B
+            fu
+          }
+        }
+
+        assert(_dest.length <= op_fu_list.length)
+        (_src1 zip _src2 zip _dest zip op_fu_list).map {
           case (((_1, _2), _3), fu) =>
             fu.io.a := _1
             fu.io.b := _2
@@ -688,8 +755,23 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val _dest = emit.vec_a.take(8)
           val _src1 = intake.vec_a.take(8)
           val _src2 = intake.vec_a.drop(8)
-          assert(_dest.length <= fu_list.length)
-          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+
+          val op_fu_list = if(!p.disjoint_pipes){
+            fu_list
+          } else {
+            List.fill(_dest.length) {
+              val fu = Module(new AddRecFN(8, 24))
+              fu.io.a := 0.U
+              fu.io.b := 0.U
+              fu.io.detectTininess := _tininess_rule
+              fu.io.roundingMode := _rounding_rule
+              fu.io.subOp := false.B
+              fu
+            }
+          }
+
+          assert(_dest.length <= op_fu_list.length)
+          (_src1 zip _src2 zip _dest zip op_fu_list).foreach {
             case (((_1, _2), _3), fu) =>
               fu.io.a := _1
               fu.io.b := _2
@@ -716,7 +798,22 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           ).flatten
           assert(_dest.length == _src1.length)
           assert(_dest.length == _src2.length)
-          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+
+          val op_fu_list = if(!p.disjoint_pipes){
+            fu_list
+          } else {
+            List.fill(_dest.length) {
+              val fu = Module(new AddRecFN(8, 24))
+              fu.io.a := 0.U
+              fu.io.b := 0.U
+              fu.io.detectTininess := _tininess_rule
+              fu.io.roundingMode := _rounding_rule
+              fu.io.subOp := false.B
+              fu
+            }
+          }
+
+          (_src1 zip _src2 zip _dest zip op_fu_list).foreach {
             case (((_1, _2), _3), fu) =>
               fu.io.a := _1
               fu.io.b := _2
@@ -785,7 +882,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
 
   // stage 6 performs 3 adds for ray-triangle test to find the value of U, V, W,
   // or 4 adds for euclidean, or 4 adds for angular
-  stage_functions(6) = Some({ intake =>
+stage_functions(6) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
@@ -817,7 +914,22 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           intake.V_subtrahend,
           intake.W_subtrahend
         )
-        (_dest zip _src1 zip _src2 zip fu_list).map {
+
+        val op_fu_list = if(!p.disjoint_pipes){
+          fu_list
+        } else {
+          List.fill(_dest.length) {
+            val fu = Module(new AddRecFN(8, 24))
+            fu.io.subOp := false.B
+            fu.io.a := 0.U
+            fu.io.b := 0.U
+            fu.io.roundingMode := _rounding_rule
+            fu.io.detectTininess := _tininess_rule
+            fu
+          }
+        }
+
+        (_dest zip _src1 zip _src2 zip op_fu_list).map {
           case (((_1, _2), _3), fu) =>
             fu.io.subOp := true.B
             fu.io.a := _2
@@ -839,11 +951,26 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val _dest = emit.vec_a.take(4)
           val _src1 = intake.vec_a.take(4)
           val _src2 = intake.vec_a.drop(4)
-          assert(_dest.length <= fu_list.length)
+
+          val op_fu_list = if(!p.disjoint_pipes){
+            fu_list
+          } else {
+            List.fill(_dest.length) {
+              val fu = Module(new AddRecFN(8, 24))
+              fu.io.subOp := false.B
+              fu.io.a := 0.U
+              fu.io.b := 0.U
+              fu.io.roundingMode := _rounding_rule
+              fu.io.detectTininess := _tininess_rule
+              fu
+            }
+          }
+
+          assert(_dest.length <= op_fu_list.length)
 
           // the zipped seq will be limited in length by the shorted component,
           // so it's 4 elements long
-          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+          (_src1 zip _src2 zip _dest zip op_fu_list).foreach {
             case (((_1, _2), _3), fu) =>
               fu.io.a := _1
               fu.io.b := _2
@@ -870,7 +997,22 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           ).flatten
           assert(_dest.length == _src1.length)
           assert(_dest.length == _src2.length)
-          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+
+          val op_fu_list = if(!p.disjoint_pipes){
+            fu_list
+          } else {
+            List.fill(_dest.length) {
+              val fu = Module(new AddRecFN(8, 24))
+              fu.io.subOp := false.B
+              fu.io.a := 0.U
+              fu.io.b := 0.U
+              fu.io.roundingMode := _rounding_rule
+              fu.io.detectTininess := _tininess_rule
+              fu
+            }
+          }
+
+          (_src1 zip _src2 zip _dest zip op_fu_list).foreach {
             case (((_1, _2), _3), fu) =>
               fu.io.a := _1
               fu.io.b := _2
@@ -930,7 +1072,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
 
   // stage 8 does two adds for ray-triangle test to find out the partial sum for
   // t_denom and t_num, or two adds for euclidean, or two adds for angular
-  stage_functions(8) = Some({ intake =>
+stage_functions(8) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
@@ -971,11 +1113,26 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val _dest = emit.vec_a.take(2)
           val _src1 = intake.vec_a.take(2)
           val _src2 = intake.vec_a.drop(2)
-          assert(_dest.length <= fu_list.length)
+
+          val op_fu_list = if(!p.disjoint_pipes){
+            fu_list
+          } else {
+            List.fill(_dest.length) {
+              val fu = Module(new AddRecFN(8, 24))
+              fu.io.subOp := false.B
+              fu.io.a := 0.U
+              fu.io.b := 0.U
+              fu.io.roundingMode := _rounding_rule
+              fu.io.detectTininess := _tininess_rule
+              fu
+            }
+          }
+
+          assert(_dest.length <= op_fu_list.length)
 
           // the zipped seq will be limited in length by the shortest component,
           // so it's 2 elements long
-          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+          (_src1 zip _src2 zip _dest zip op_fu_list).foreach {
             case (((_1, _2), _3), fu) =>
               fu.io.a := _1
               fu.io.b := _2
@@ -1004,7 +1161,22 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           ).flatten
           assert(_dest.length == _src1.length)
           assert(_dest.length == _src2.length)
-          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+
+          val op_fu_list = if(!p.disjoint_pipes){
+            fu_list
+          } else {
+            List.fill(_dest.length) {
+              val fu = Module(new AddRecFN(8, 24))
+              fu.io.subOp := false.B
+              fu.io.a := 0.U
+              fu.io.b := 0.U
+              fu.io.roundingMode := _rounding_rule
+              fu.io.detectTininess := _tininess_rule
+              fu
+            }
+          }
+
+          (_src1 zip _src2 zip _dest zip op_fu_list).foreach {
             case (((_1, _2), _3), fu) =>
               fu.io.a := _1
               fu.io.b := _2
@@ -1022,7 +1194,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   // stage 9 performs two adds for ray-triangle test, to complete the summation
   // of t_denom and t_num, or a single add for euclidean, or two accumulations
   // for angular
-  stage_functions(9) = Some({ intake =>
+stage_functions(9) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
@@ -1063,11 +1235,26 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val _dest = emit.vec_a.take(1)
           val _src1 = intake.vec_a.take(1)
           val _src2 = intake.vec_a.drop(1)
-          assert(_dest.length <= fu_list.length)
+
+          val op_fu_list = if(!p.disjoint_pipes){
+            fu_list
+          } else {
+            List.fill(_dest.length) {
+              val fu = Module(new AddRecFN(8, 24))
+              fu.io.subOp := false.B
+              fu.io.a := 0.U
+              fu.io.b := 0.U
+              fu.io.roundingMode := _rounding_rule
+              fu.io.detectTininess := _tininess_rule
+              fu
+            }
+          }
+
+          assert(_dest.length <= op_fu_list.length)
 
           // the zipped seq will be limited in length by the shortest component,
-          // so it's 1 elements long
-          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+          // so it's 1 element long
+          (_src1 zip _src2 zip _dest zip op_fu_list).foreach {
             case (((_1, _2), _3), fu) =>
               fu.io.a := _1
               fu.io.b := _2
@@ -1092,8 +1279,21 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
             angular_bundle.angular_query(0),
             angular_bundle.angular_candidate(0)
           )
-          assert(_dest.length <= fu_list.length)
-          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+          val op_fu_list = if(!p.disjoint_pipes){
+            fu_list
+          } else {
+            List.fill(_dest.length) {
+              val fu = Module(new AddRecFN(8, 24))
+              fu.io.subOp := false.B
+              fu.io.a := 0.U
+              fu.io.b := 0.U
+              fu.io.roundingMode := _rounding_rule
+              fu.io.detectTininess := _tininess_rule
+              fu
+            }
+          }
+          assert(_dest.length <= op_fu_list.length)
+          (_src1 zip _src2 zip _dest zip op_fu_list).foreach {
             case (((_1, _2), _3), fu) =>
               fu.io.a := _1
               fu.io.b := _2

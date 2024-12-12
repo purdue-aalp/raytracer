@@ -39,13 +39,13 @@ trait WithExposedTime extends Module {
 }
 
 class UnifiedDatapath_wrapper
-    extends UnifiedDatapath(p = RaytracerParams(false, true, None))
+    extends UnifiedDatapath(p = RaytracerParams(false, true, None, true))
     with WithExposedTime {
   val exposed_time = expose(_time)
 }
 
 class UnifiedDatapath_wrapper_16
-    extends UnifiedDatapath(p = RaytracerParams(false, true, Some(16)))
+    extends UnifiedDatapath(p = RaytracerParams(false, true, Some(16), true))
     with WithExposedTime {
   import hardfloat._
   val exposed_time = expose(_time)
