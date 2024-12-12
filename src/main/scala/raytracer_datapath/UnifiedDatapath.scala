@@ -21,13 +21,11 @@ case class RaytracerParams(
     // No euclidean support if None, else supports processing X dimensions per cycle given Some(X)
     support_euclidean: Option[Int] = None,
 
-    /**
-      *  when set to true, two changes will happen:
-        (1) Each op use its own functional unit. In other words, no FU is shared
-        between any two op modes
-        (2) Operations with fewer steps will skip the "idle" stages.
+    /** when set to true, two changes will happen: (1) Each op use its own
+      * functional unit. In other words, no FU is shared between any two op
+      * modes (2) Operations with fewer steps will skip the "idle" stages.
       */
-    disjoint_pipes: Boolean = false,
+    disjoint_pipes: Boolean = false
 )
 
 object DatapathConstants {
@@ -161,9 +159,10 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           intake.ray.origin.z
         )
 
-        val op_fu_list = if(!p.disjoint_pipes){
+        val op_fu_list = if (!p.disjoint_pipes) {
           fu_list
         } else {
+          // in case of disjoint pipes, use own FUs
           List.fill(_dest.length) {
             val fu = Module(new AddRecFN(8, 24))
             fu.io.a := 0.U
@@ -228,9 +227,10 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           )
         }
 
-        val op_fu_list = if(!p.disjoint_pipes){
+        val op_fu_list = if (!p.disjoint_pipes) {
           fu_list
         } else {
+          // in case of disjoint pipes, use own FUs
           List.fill(_dest.length) {
             val fu = Module(new AddRecFN(8, 24))
             fu.io.a := 0.U
@@ -265,10 +265,11 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val _src2 = intake.vec_b.getElements
           val _mask = intake.vec_mask(0).asBools
 
-          val op_fu_list = if(!p.disjoint_pipes){
+          val op_fu_list = if (!p.disjoint_pipes) {
             fu_list
           } else {
             List.fill(_dest.length) {
+              // in case of disjoint pipes, use own FUs
               val fu = Module(new AddRecFN(8, 24))
               fu.io.a := 0.U
               fu.io.b := 0.U
@@ -327,7 +328,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   // triangle vertices, or 16 muls for euclidean to calculate the square of
   // diffs, or 16 muls for angular to calculate the element-wise product between
   // query point and candidate point, and the query point and itself.
-stage_functions(3) = Some({ intake =>
+  stage_functions(3) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
@@ -383,9 +384,10 @@ stage_functions(3) = Some({ intake =>
           intake.triangle.C.at(kz)
         )
 
-        val op_fu_list = if(!p.disjoint_pipes){
+        val op_fu_list = if (!p.disjoint_pipes) {
           fu_list
         } else {
+          // in case of disjoint pipes, use own FUs
           List.fill(_dest.length) {
             val fu = Module(new MulRecFN(8, 24))
             fu.io.a := 0.U
@@ -449,9 +451,10 @@ stage_functions(3) = Some({ intake =>
           )
         }
 
-        val op_fu_list = if(!p.disjoint_pipes){
+        val op_fu_list = if (!p.disjoint_pipes) {
           fu_list
         } else {
+          // in case of disjoint pipes, use own FUs
           List.fill(_dest.length) {
             val fu = Module(new MulRecFN(8, 24))
             fu.io.a := 0.U
@@ -484,9 +487,10 @@ stage_functions(3) = Some({ intake =>
           val _src1 = intake.vec_a.getElements
           val _src2 = _src1
 
-          val op_fu_list = if(!p.disjoint_pipes){
+          val op_fu_list = if (!p.disjoint_pipes) {
             fu_list
           } else {
+            // in case of disjoint pipes, use own FUs
             List.fill(_dest.length) {
               val fu = Module(new MulRecFN(8, 24))
               fu.io.a := 0.U
@@ -533,7 +537,7 @@ stage_functions(3) = Some({ intake =>
             angular_bundle.angular_candidate.getElements
           ).flatten
 
-          val op_fu_list = if(!p.disjoint_pipes){
+          val op_fu_list = if (!p.disjoint_pipes) {
             fu_list
           } else {
             List.fill(_dest.length) {
@@ -545,6 +549,8 @@ stage_functions(3) = Some({ intake =>
               fu
             }
           }
+
+          assert(_dest.length <= op_fu_list.length)
 
           (_src1 zip _src2 zip _dest zip op_fu_list).foreach {
             case (((_1, _2), _3), fu) =>
@@ -564,7 +570,7 @@ stage_functions(3) = Some({ intake =>
   // shearing and scaling of triangle vertices, 12 CAS and 4 comparisons for ray-box
   // intersection to identify intersecting boxes, or 8 adds for euclidean to
   // reduce the partial sums, or 8 adds for angular to reduce the partial sums
-stage_functions(4) = Some({ intake =>
+  stage_functions(4) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
@@ -626,7 +632,7 @@ stage_functions(4) = Some({ intake =>
           intake.C.y
         )
 
-        val op_fu_list = if(!p.disjoint_pipes){
+        val op_fu_list = if (!p.disjoint_pipes) {
           fu_list
         } else {
           List.fill(_dest.length) {
@@ -756,7 +762,7 @@ stage_functions(4) = Some({ intake =>
           val _src1 = intake.vec_a.take(8)
           val _src2 = intake.vec_a.drop(8)
 
-          val op_fu_list = if(!p.disjoint_pipes){
+          val op_fu_list = if (!p.disjoint_pipes) {
             fu_list
           } else {
             List.fill(_dest.length) {
@@ -799,7 +805,7 @@ stage_functions(4) = Some({ intake =>
           assert(_dest.length == _src1.length)
           assert(_dest.length == _src2.length)
 
-          val op_fu_list = if(!p.disjoint_pipes){
+          val op_fu_list = if (!p.disjoint_pipes) {
             fu_list
           } else {
             List.fill(_dest.length) {
@@ -812,6 +818,8 @@ stage_functions(4) = Some({ intake =>
               fu
             }
           }
+
+          assert(_dest.length <= op_fu_list.length)
 
           (_src1 zip _src2 zip _dest zip op_fu_list).foreach {
             case (((_1, _2), _3), fu) =>
@@ -882,7 +890,7 @@ stage_functions(4) = Some({ intake =>
 
   // stage 6 performs 3 adds for ray-triangle test to find the value of U, V, W,
   // or 4 adds for euclidean, or 4 adds for angular
-stage_functions(6) = Some({ intake =>
+  stage_functions(6) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
@@ -915,7 +923,7 @@ stage_functions(6) = Some({ intake =>
           intake.W_subtrahend
         )
 
-        val op_fu_list = if(!p.disjoint_pipes){
+        val op_fu_list = if (!p.disjoint_pipes) {
           fu_list
         } else {
           List.fill(_dest.length) {
@@ -952,7 +960,7 @@ stage_functions(6) = Some({ intake =>
           val _src1 = intake.vec_a.take(4)
           val _src2 = intake.vec_a.drop(4)
 
-          val op_fu_list = if(!p.disjoint_pipes){
+          val op_fu_list = if (!p.disjoint_pipes) {
             fu_list
           } else {
             List.fill(_dest.length) {
@@ -998,7 +1006,7 @@ stage_functions(6) = Some({ intake =>
           assert(_dest.length == _src1.length)
           assert(_dest.length == _src2.length)
 
-          val op_fu_list = if(!p.disjoint_pipes){
+          val op_fu_list = if (!p.disjoint_pipes) {
             fu_list
           } else {
             List.fill(_dest.length) {
@@ -1072,7 +1080,7 @@ stage_functions(6) = Some({ intake =>
 
   // stage 8 does two adds for ray-triangle test to find out the partial sum for
   // t_denom and t_num, or two adds for euclidean, or two adds for angular
-stage_functions(8) = Some({ intake =>
+  stage_functions(8) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
@@ -1114,7 +1122,7 @@ stage_functions(8) = Some({ intake =>
           val _src1 = intake.vec_a.take(2)
           val _src2 = intake.vec_a.drop(2)
 
-          val op_fu_list = if(!p.disjoint_pipes){
+          val op_fu_list = if (!p.disjoint_pipes) {
             fu_list
           } else {
             List.fill(_dest.length) {
@@ -1162,7 +1170,7 @@ stage_functions(8) = Some({ intake =>
           assert(_dest.length == _src1.length)
           assert(_dest.length == _src2.length)
 
-          val op_fu_list = if(!p.disjoint_pipes){
+          val op_fu_list = if (!p.disjoint_pipes) {
             fu_list
           } else {
             List.fill(_dest.length) {
@@ -1194,7 +1202,7 @@ stage_functions(8) = Some({ intake =>
   // stage 9 performs two adds for ray-triangle test, to complete the summation
   // of t_denom and t_num, or a single add for euclidean, or two accumulations
   // for angular
-stage_functions(9) = Some({ intake =>
+  stage_functions(9) = Some({ intake =>
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
@@ -1236,7 +1244,7 @@ stage_functions(9) = Some({ intake =>
           val _src1 = intake.vec_a.take(1)
           val _src2 = intake.vec_a.drop(1)
 
-          val op_fu_list = if(!p.disjoint_pipes){
+          val op_fu_list = if (!p.disjoint_pipes) {
             fu_list
           } else {
             List.fill(_dest.length) {
@@ -1279,7 +1287,7 @@ stage_functions(9) = Some({ intake =>
             angular_bundle.angular_query(0),
             angular_bundle.angular_candidate(0)
           )
-          val op_fu_list = if(!p.disjoint_pipes){
+          val op_fu_list = if (!p.disjoint_pipes) {
             fu_list
           } else {
             List.fill(_dest.length) {
@@ -1438,14 +1446,14 @@ stage_functions(9) = Some({ intake =>
     s.intake :<>= w
     s.emit
   }
-  
+
   // Need to specify some value for this input signal otherwise the FIRRTL
   // compiler will complain of a "not fully initialized" error.
   // However, this assignment will either be overwritten below (if this is
   // exactly the last meaningful stage), or be optimized away (if this is a
   // stage beyond the stage from which we tap the output)
   _last_stage_emit_port.ready := true.B
-  
+
   // now that all stages are chained up, overwrite the first stage
   // stage 1 converts FN to RecFN, so we need a more generic SkidBufferStage
   val stage_1_actual_module = Module(
