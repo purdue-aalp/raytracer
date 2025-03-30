@@ -314,6 +314,9 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       seq_vec_a: Seq[SW_Vector],
       seq_vec_b: Seq[SW_Vector]
   ): Unit = description in {
+    val desc_substring: String = description
+      .replaceAll("[^0-9a-zA-Z]", "_")
+      .replaceAll(" ", "_")
     val combined_data_list: List[SW_EnhancedCombinedData] = List.from {
       (seq_vec_a zip seq_vec_b).flatMap { case (a, b) =>
         get_euclidean_job_seq_from_vec_pair(a, b)
@@ -328,7 +331,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
     test(gen_baseline_or_extended_datapath(true, disjoint_pipes))
       .withAnnotations(
-        chisel_test_annotations("euclidean_" + true.toString() + "_disjoint_" + disjoint_pipes.toString()) :++ {
+        chisel_test_annotations("euclidean_" + true.toString() + "_disjoint_" + disjoint_pipes.toString() + "_" + desc_substring) :++ {
           if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }
           else { Nil }
         }
@@ -379,6 +382,9 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       seq_vec_a: Seq[SW_Vector],
       seq_vec_b: Seq[SW_Vector]
   ): Unit = description in {
+    val desc_substring: String = description
+      .replaceAll("[^0-9a-zA-Z]", "_")
+      .replaceAll(" ", "_")
     val combined_data_list: List[SW_EnhancedCombinedData] = List.from {
       (seq_vec_a zip seq_vec_b).flatMap { case (a, b) =>
         get_angular_job_seq_from_vec_pair(a, b)
@@ -396,7 +402,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
     test(gen_baseline_or_extended_datapath(true, disjoint_pipes))
       .withAnnotations(
-        chisel_test_annotations("euclidean_" + true.toString() + "_disjoint_" + disjoint_pipes.toString()) :++ {
+        chisel_test_annotations("euclidean_" + true.toString() + "_disjoint_" + disjoint_pipes.toString() + "_" + desc_substring) :++ {
           if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }
           else { Nil }
         }
@@ -456,6 +462,10 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
       triangle_seq: Seq[SW_Triangle],
       op_seq: Seq[SW_Opcode]
   ): Unit = {
+    // substitute all spaces and punctuation marks with underscores, so the string is safe to use as a file name
+    val desc_substring: String = description
+      .replaceAll("[^0-9a-zA-Z]", "_")
+      .replaceAll(" ", "_")
     description in {
       val combined_data_list: List[SW_EnhancedCombinedData] = List.from {
         extended match {
@@ -532,7 +542,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
       test(gen_baseline_or_extended_datapath(extended, disjoint_pipes))
         .withAnnotations(
-          chisel_test_annotations("euclidean_" + extended.toString() + "_disjoint_" + disjoint_pipes.toString()) :++ {
+          chisel_test_annotations("euclidean_" + extended.toString() + "_disjoint_" + disjoint_pipes.toString() + "_" + desc_substring) :++ {
             if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }
             else { Nil }
           }
