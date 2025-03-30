@@ -110,7 +110,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     emit := intake
 
     // a list of AddRecFN modules, long enough to support any operation of this stage
-    val fu_list: List[AddRecFN] = List.fill(24) {
+    val fu_list: List[AddRecFN] = List.fill(if(!p.disjoint_pipes) 24 else 400) {
       val fu = Module(new AddRecFN(8, 24))
       fu.io.a := 0.U
       fu.io.b := 0.U
@@ -162,16 +162,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
         val op_fu_list = if (!p.disjoint_pipes) {
           fu_list
         } else {
-          // in case of disjoint pipes, use own FUs
-          List.fill(_dest.length) {
-            val fu = Module(new AddRecFN(8, 24))
-            fu.io.a := 0.U
-            fu.io.b := 0.U
-            fu.io.detectTininess := _tininess_rule
-            fu.io.roundingMode := _rounding_rule
-            fu.io.subOp := false.B
-            fu
-          }
+          fu_list.drop(0)
         }
 
         assert(_dest.length <= op_fu_list.length)
@@ -231,15 +222,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           fu_list
         } else {
           // in case of disjoint pipes, use own FUs
-          List.fill(_dest.length) {
-            val fu = Module(new AddRecFN(8, 24))
-            fu.io.a := 0.U
-            fu.io.b := 0.U
-            fu.io.detectTininess := _tininess_rule
-            fu.io.roundingMode := _rounding_rule
-            fu.io.subOp := false.B
-            fu
-          }
+          fu_list.drop(100)
         }
 
         assert(_dest.length <= op_fu_list.length)
@@ -268,16 +251,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val op_fu_list = if (!p.disjoint_pipes) {
             fu_list
           } else {
-            List.fill(_dest.length) {
-              // in case of disjoint pipes, use own FUs
-              val fu = Module(new AddRecFN(8, 24))
-              fu.io.a := 0.U
-              fu.io.b := 0.U
-              fu.io.detectTininess := _tininess_rule
-              fu.io.roundingMode := _rounding_rule
-              fu.io.subOp := false.B
-              fu
-            }
+            fu_list.drop(200)
           }
 
           assert(_dest.length <= op_fu_list.length)
@@ -332,7 +306,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
-    val fu_list: List[MulRecFN] = List.fill(24) {
+    val fu_list: List[MulRecFN] = List.fill(if(!p.disjoint_pipes) 24 else 400) {
       val fu = Module(new MulRecFN(8, 24))
       fu.io.a := 0.U
       fu.io.b := 0.U
@@ -387,15 +361,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
         val op_fu_list = if (!p.disjoint_pipes) {
           fu_list
         } else {
-          // in case of disjoint pipes, use own FUs
-          List.fill(_dest.length) {
-            val fu = Module(new MulRecFN(8, 24))
-            fu.io.a := 0.U
-            fu.io.b := 0.U
-            fu.io.detectTininess := _tininess_rule
-            fu.io.roundingMode := _rounding_rule
-            fu
-          }
+          fu_list.drop(0)
         }
 
         assert(_dest.length <= op_fu_list.length)
@@ -454,15 +420,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
         val op_fu_list = if (!p.disjoint_pipes) {
           fu_list
         } else {
-          // in case of disjoint pipes, use own FUs
-          List.fill(_dest.length) {
-            val fu = Module(new MulRecFN(8, 24))
-            fu.io.a := 0.U
-            fu.io.b := 0.U
-            fu.io.detectTininess := _tininess_rule
-            fu.io.roundingMode := _rounding_rule
-            fu
-          }
+          fu_list.drop(100)
         }
 
         assert(_dest.length <= op_fu_list.length)
@@ -490,15 +448,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val op_fu_list = if (!p.disjoint_pipes) {
             fu_list
           } else {
-            // in case of disjoint pipes, use own FUs
-            List.fill(_dest.length) {
-              val fu = Module(new MulRecFN(8, 24))
-              fu.io.a := 0.U
-              fu.io.b := 0.U
-              fu.io.detectTininess := _tininess_rule
-              fu.io.roundingMode := _rounding_rule
-              fu
-            }
+            fu_list.drop(200)
           }
 
           assert(_dest.length <= op_fu_list.length)
@@ -540,14 +490,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val op_fu_list = if (!p.disjoint_pipes) {
             fu_list
           } else {
-            List.fill(_dest.length) {
-              val fu = Module(new MulRecFN(8, 24))
-              fu.io.a := 0.U
-              fu.io.b := 0.U
-              fu.io.detectTininess := _tininess_rule
-              fu.io.roundingMode := _rounding_rule
-              fu
-            }
+            fu_list.drop(300)
           }
 
           assert(_dest.length <= op_fu_list.length)
@@ -574,7 +517,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
-    val fu_list: List[AddRecFN] = List.fill(8) {
+    val fu_list: List[AddRecFN] = List.fill(if(!p.disjoint_pipes) 8 else 400) {
       val fu = Module(new AddRecFN(8, 24))
       fu.io.a := 0.U
       fu.io.b := 0.U
@@ -635,15 +578,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
         val op_fu_list = if (!p.disjoint_pipes) {
           fu_list
         } else {
-          List.fill(_dest.length) {
-            val fu = Module(new AddRecFN(8, 24))
-            fu.io.a := 0.U
-            fu.io.b := 0.U
-            fu.io.detectTininess := _tininess_rule
-            fu.io.roundingMode := _rounding_rule
-            fu.io.subOp := false.B
-            fu
-          }
+          fu_list.drop(0)
         }
 
         assert(_dest.length <= op_fu_list.length)
@@ -765,15 +700,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val op_fu_list = if (!p.disjoint_pipes) {
             fu_list
           } else {
-            List.fill(_dest.length) {
-              val fu = Module(new AddRecFN(8, 24))
-              fu.io.a := 0.U
-              fu.io.b := 0.U
-              fu.io.detectTininess := _tininess_rule
-              fu.io.roundingMode := _rounding_rule
-              fu.io.subOp := false.B
-              fu
-            }
+            fu_list.drop(200)
           }
 
           assert(_dest.length <= op_fu_list.length)
@@ -808,15 +735,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val op_fu_list = if (!p.disjoint_pipes) {
             fu_list
           } else {
-            List.fill(_dest.length) {
-              val fu = Module(new AddRecFN(8, 24))
-              fu.io.a := 0.U
-              fu.io.b := 0.U
-              fu.io.detectTininess := _tininess_rule
-              fu.io.roundingMode := _rounding_rule
-              fu.io.subOp := false.B
-              fu
-            }
+            fu_list.drop(300)
           }
 
           assert(_dest.length <= op_fu_list.length)
@@ -894,7 +813,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
-    val fu_list = List.fill[AddRecFN](4) {
+    val fu_list = List.fill[AddRecFN](if(!p.disjoint_pipes) 4 else 400) {
       val fu = Module(new AddRecFN(8, 24))
       fu.io.subOp := false.B
       fu.io.a := 0.U
@@ -926,15 +845,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
         val op_fu_list = if (!p.disjoint_pipes) {
           fu_list
         } else {
-          List.fill(_dest.length) {
-            val fu = Module(new AddRecFN(8, 24))
-            fu.io.subOp := false.B
-            fu.io.a := 0.U
-            fu.io.b := 0.U
-            fu.io.roundingMode := _rounding_rule
-            fu.io.detectTininess := _tininess_rule
-            fu
-          }
+          fu_list.drop(0)
         }
 
         (_dest zip _src1 zip _src2 zip op_fu_list).map {
@@ -963,15 +874,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val op_fu_list = if (!p.disjoint_pipes) {
             fu_list
           } else {
-            List.fill(_dest.length) {
-              val fu = Module(new AddRecFN(8, 24))
-              fu.io.subOp := false.B
-              fu.io.a := 0.U
-              fu.io.b := 0.U
-              fu.io.roundingMode := _rounding_rule
-              fu.io.detectTininess := _tininess_rule
-              fu
-            }
+            fu_list.drop(200)
           }
 
           assert(_dest.length <= op_fu_list.length)
@@ -1009,15 +912,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val op_fu_list = if (!p.disjoint_pipes) {
             fu_list
           } else {
-            List.fill(_dest.length) {
-              val fu = Module(new AddRecFN(8, 24))
-              fu.io.subOp := false.B
-              fu.io.a := 0.U
-              fu.io.b := 0.U
-              fu.io.roundingMode := _rounding_rule
-              fu.io.detectTininess := _tininess_rule
-              fu
-            }
+            fu_list.drop(300)
           }
 
           (_src1 zip _src2 zip _dest zip op_fu_list).foreach {
@@ -1084,7 +979,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
-    val fu_list = List.fill[AddRecFN](2) {
+    val fu_list = List.fill[AddRecFN](if(!p.disjoint_pipes) 2 else 400) {
       val fu = Module(new AddRecFN(8, 24))
       fu.io.subOp := false.B
       fu.io.a := 0.U
@@ -1125,15 +1020,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val op_fu_list = if (!p.disjoint_pipes) {
             fu_list
           } else {
-            List.fill(_dest.length) {
-              val fu = Module(new AddRecFN(8, 24))
-              fu.io.subOp := false.B
-              fu.io.a := 0.U
-              fu.io.b := 0.U
-              fu.io.roundingMode := _rounding_rule
-              fu.io.detectTininess := _tininess_rule
-              fu
-            }
+            fu_list.drop(200)
           }
 
           assert(_dest.length <= op_fu_list.length)
@@ -1173,15 +1060,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val op_fu_list = if (!p.disjoint_pipes) {
             fu_list
           } else {
-            List.fill(_dest.length) {
-              val fu = Module(new AddRecFN(8, 24))
-              fu.io.subOp := false.B
-              fu.io.a := 0.U
-              fu.io.b := 0.U
-              fu.io.roundingMode := _rounding_rule
-              fu.io.detectTininess := _tininess_rule
-              fu
-            }
+            fu_list.drop(300)
           }
 
           (_src1 zip _src2 zip _dest zip op_fu_list).foreach {
@@ -1206,7 +1085,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
-    val fu_list = List.fill[AddRecFN](2) {
+    val fu_list = List.fill[AddRecFN](if(!p.disjoint_pipes) 2 else 400) {
       val fu = Module(new AddRecFN(8, 24))
       fu.io.subOp := false.B
       fu.io.a := 0.U
@@ -1247,15 +1126,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val op_fu_list = if (!p.disjoint_pipes) {
             fu_list
           } else {
-            List.fill(_dest.length) {
-              val fu = Module(new AddRecFN(8, 24))
-              fu.io.subOp := false.B
-              fu.io.a := 0.U
-              fu.io.b := 0.U
-              fu.io.roundingMode := _rounding_rule
-              fu.io.detectTininess := _tininess_rule
-              fu
-            }
+            fu_list.drop(200)
           }
 
           assert(_dest.length <= op_fu_list.length)
@@ -1290,15 +1161,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val op_fu_list = if (!p.disjoint_pipes) {
             fu_list
           } else {
-            List.fill(_dest.length) {
-              val fu = Module(new AddRecFN(8, 24))
-              fu.io.subOp := false.B
-              fu.io.a := 0.U
-              fu.io.b := 0.U
-              fu.io.roundingMode := _rounding_rule
-              fu.io.detectTininess := _tininess_rule
-              fu
-            }
+            fu_list.drop(300)
           }
           assert(_dest.length <= op_fu_list.length)
           (_src1 zip _src2 zip _dest zip op_fu_list).foreach {
@@ -1464,15 +1327,16 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
         val output = WireDefault(0.U.asTypeOf(new ExtendedPipelineBundle(p)))
         output.opcode := input.opcode
         output.ray := RayConvertFNtoRecFN(input.ray)
-        output.triangle := TriangleConvertFNtoRecFN(input.triangle)
+        // output.triangle := Mux(input.opcode===UnifiedDatapathOpCode.OpTriangle, TriangleConvertFNtoRecFN(input.triangle), 0.U.asTypeOf(output.triangle))
+        output.triangle := TriangleConvertFNtoRecFN(Mux(input.opcode===UnifiedDatapathOpCode.OpTriangle, input.triangle, 0.U.asTypeOf(input.triangle)))
         (output.aabb zip input.aabb).map { case (reg_o, reg_i) =>
-          reg_o := AABBConvertFNtoRecFN(reg_i)
+          reg_o := AABBConvertFNtoRecFN(Mux(input.opcode===UnifiedDatapathOpCode.OpQuadbox, reg_i, 0.U.asTypeOf(reg_i)))
         }
         if (p.support_euclidean.isDefined) {
           println("datapath supports euclidean!")
           for (idx <- 0 until p.support_euclidean.get) {
-            output.vec_a(idx) := recFNFromFN(8, 24, input.euclidean_a(idx))
-            output.vec_b(idx) := recFNFromFN(8, 24, input.euclidean_b(idx))
+            output.vec_a(idx) := recFNFromFN(8, 24, Mux(input.opcode===UnifiedDatapathOpCode.OpAngular || input.opcode===UnifiedDatapathOpCode.OpEuclidean , input.euclidean_a(idx), 0.U))
+            output.vec_b(idx) := recFNFromFN(8, 24, Mux(input.opcode===UnifiedDatapathOpCode.OpAngular || input.opcode===UnifiedDatapathOpCode.OpEuclidean , input.euclidean_b(idx), 0.U))
           }
           // the two signals (vec_mask and vec_reset_accum) are Vec(1, XXX)
           output.vec_mask := input.euclidean_mask
