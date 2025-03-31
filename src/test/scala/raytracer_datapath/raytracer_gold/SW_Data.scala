@@ -411,8 +411,8 @@ object RandomSWData {
   ): (SW_Vector, SW_Vector) = {
     val _length = r.nextInt(largest_length) + 1
     (
-      genRandomVector(lower_bound, upper_bound, _length),
-      genRandomVector(lower_bound, upper_bound, _length)
+      genRandomVector(lower_bound, upper_bound, _length, r),
+      genRandomVector(lower_bound, upper_bound, _length, r)
     )
   }
 }
