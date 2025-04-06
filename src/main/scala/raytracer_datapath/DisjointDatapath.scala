@@ -10,33 +10,33 @@ import chisel3.experimental.VecLiterals._ // for VecLit
 import chisel3.util._
 import chisel3.experimental.dataview._
 
-case class RaytracerParams(
-    // What format the FP numbers in IO is.
-    // 32-bit IEEE-754 compliant float if false, 33-bit recorded format if true
-    io_recorded_float: Boolean = false,
+// case class RaytracerParams(
+//     // What format the FP numbers in IO is.
+//     // 32-bit IEEE-754 compliant float if false, 33-bit recorded format if true
+//     io_recorded_float: Boolean = false,
 
-    // format of FP numbers passed around between staged
-    internal_recorded_float: Boolean = true,
+//     // format of FP numbers passed around between staged
+//     internal_recorded_float: Boolean = true,
 
-    // No euclidean support if None, else supports processing X dimensions per cycle given Some(X)
-    support_euclidean: Option[Int] = None,
+//     // No euclidean support if None, else supports processing X dimensions per cycle given Some(X)
+//     support_euclidean: Option[Int] = None,
 
-    /** when set to true, two changes will happen: (1) Each op use its own
-      * functional unit. In other words, no FU is shared between any two op
-      * modes (2) Operations with fewer steps will skip the "idle" stages.
-      */
-    disjoint_pipes: Boolean = false
-)
+//     /** when set to true, two changes will happen: (1) Each op use its own
+//       * functional unit. In other words, no FU is shared between any two op
+//       * modes (2) Operations with fewer steps will skip the "idle" stages.
+//       */
+//     disjoint_pipes: Boolean = false
+// )
 
-object DatapathConstants {
-  def _zero_RecFN = recFNFromFN(8, 24, 0x0.U)
-  def _neg_1_0_RecFN = recFNFromFN(8, 24, 0xbf800000.S)
-  def _pos_1_0_RecFN = recFNFromFN(8, 24, 0x3f800000.S)
-  // 0x7f800000 is positive inf in 32-bit float
-  def _positive_inf_RecFN = recFNFromFN(8, 24, 0x7f800000.S)
-}
+// object DatapathConstants {
+//   def _zero_RecFN = recFNFromFN(8, 24, 0x0.U)
+//   def _neg_1_0_RecFN = recFNFromFN(8, 24, 0xbf800000.S)
+//   def _pos_1_0_RecFN = recFNFromFN(8, 24, 0x3f800000.S)
+//   // 0x7f800000 is positive inf in 32-bit float
+//   def _positive_inf_RecFN = recFNFromFN(8, 24, 0x7f800000.S)
+// }
 
-class UnifiedDatapath(p: RaytracerParams) extends Module {
+class DisjointDatapath(p: RaytracerParams) extends Module {
   import DatapathConstants._
 
   assert(
@@ -50,11 +50,6 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
   assert(
     p.support_euclidean.getOrElse(16) == 16,
     " raytracer currently only support processing 16-element vector pairs for euclidean distance calculation"
-  )
-
-  assert(
-    p.disjoint_pipes == false,
-    " this implementation does not support disjoint pipes, please use DisjointDatapath"
   )
 
   // input is guaranteed to be registered by this module
@@ -115,7 +110,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     emit := intake
 
     // a list of AddRecFN modules, long enough to support any operation of this stage
-    val fu_list: List[AddRecFN] = List.fill(24) {
+    val fu_list: List[AddRecFN] = List.fill(if(!p.disjoint_pipes) 24 else 400) {
       val fu = Module(new AddRecFN(8, 24))
       fu.io.a := 0.U
       fu.io.b := 0.U
@@ -164,9 +159,15 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           intake.ray.origin.z
         )
 
-        assert(_dest.length <= fu_list.length)
+        val op_fu_list = if (!p.disjoint_pipes) {
+          fu_list
+        } else {
+          fu_list.drop(0)
+        }
 
-        (_dest zip _src1 zip _src2 zip fu_list) foreach {
+        assert(_dest.length <= op_fu_list.length)
+
+        (_dest zip _src1 zip _src2 zip op_fu_list) foreach {
           case (((_1, _2), _3), fu) =>
             fu.io.subOp := true.B
             fu.io.a := _2
@@ -217,9 +218,16 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           )
         }
 
-        assert(_dest.length <= fu_list.length)
+        val op_fu_list = if (!p.disjoint_pipes) {
+          fu_list
+        } else {
+          // in case of disjoint pipes, use own FUs
+          fu_list.drop(100)
+        }
 
-        (_dest zip _src1 zip _src2 zip fu_list) foreach {
+        assert(_dest.length <= op_fu_list.length)
+
+        (_dest zip _src1 zip _src2 zip op_fu_list) foreach {
           case (((_1, _2), _3), fu) =>
             fu.io.subOp := true.B
             fu.io.a := _2
@@ -239,10 +247,17 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val _src1 = intake.vec_a.getElements
           val _src2 = intake.vec_b.getElements
           val _mask = intake.vec_mask(0).asBools
-          assert(_dest.length <= fu_list.length)
+
+          val op_fu_list = if (!p.disjoint_pipes) {
+            fu_list
+          } else {
+            fu_list.drop(200)
+          }
+
+          assert(_dest.length <= op_fu_list.length)
           assert(_mask.length == _dest.length)
 
-          (_src1 zip _src2 zip _dest zip fu_list zip _mask) foreach {
+          (_src1 zip _src2 zip _dest zip op_fu_list zip _mask) foreach {
             case ((((_1, _2), _3), fu), m) =>
               fu.io.subOp := true.B
               fu.io.a := _1
@@ -291,7 +306,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
-    val fu_list: List[MulRecFN] = List.fill(24) {
+    val fu_list: List[MulRecFN] = List.fill(if(!p.disjoint_pipes) 24 else 400) {
       val fu = Module(new MulRecFN(8, 24))
       fu.io.a := 0.U
       fu.io.b := 0.U
@@ -343,9 +358,15 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           intake.triangle.C.at(kz)
         )
 
-        assert(_dest.length <= fu_list.length)
+        val op_fu_list = if (!p.disjoint_pipes) {
+          fu_list
+        } else {
+          fu_list.drop(0)
+        }
+
+        assert(_dest.length <= op_fu_list.length)
         // _dest = _src1 * _src2
-        (_src1 zip _src2 zip _dest zip fu_list).map {
+        (_src1 zip _src2 zip _dest zip op_fu_list).map {
           case (((_1, _2), _3), fu) =>
             fu.io.a := _1
             fu.io.b := _2
@@ -396,8 +417,14 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           )
         }
 
-        assert(_dest.length <= fu_list.length)
-        (_src1 zip _src2 zip _dest zip fu_list) foreach {
+        val op_fu_list = if (!p.disjoint_pipes) {
+          fu_list
+        } else {
+          fu_list.drop(100)
+        }
+
+        assert(_dest.length <= op_fu_list.length)
+        (_src1 zip _src2 zip _dest zip op_fu_list) foreach {
           case (((_1, _2), _3), fu) =>
             fu.io.a := _1
             fu.io.b := _2
@@ -417,9 +444,16 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val _dest = emit.vec_a.getElements
           val _src1 = intake.vec_a.getElements
           val _src2 = _src1
-          assert(_dest.length <= fu_list.length)
 
-          (_src1 zip _src2 zip _dest zip fu_list) foreach {
+          val op_fu_list = if (!p.disjoint_pipes) {
+            fu_list
+          } else {
+            fu_list.drop(200)
+          }
+
+          assert(_dest.length <= op_fu_list.length)
+
+          (_src1 zip _src2 zip _dest zip op_fu_list) foreach {
             case (((_1, _2), _3), fu) =>
               fu.io.a := _1
               fu.io.b := _2
@@ -453,7 +487,15 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
             angular_bundle.angular_candidate.getElements
           ).flatten
 
-          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+          val op_fu_list = if (!p.disjoint_pipes) {
+            fu_list
+          } else {
+            fu_list.drop(300)
+          }
+
+          assert(_dest.length <= op_fu_list.length)
+
+          (_src1 zip _src2 zip _dest zip op_fu_list).foreach {
             case (((_1, _2), _3), fu) =>
               fu.io.a := _1
               fu.io.b := _2
@@ -475,7 +517,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
-    val fu_list: List[AddRecFN] = List.fill(8) {
+    val fu_list: List[AddRecFN] = List.fill(if(!p.disjoint_pipes) 8 else 400) {
       val fu = Module(new AddRecFN(8, 24))
       fu.io.a := 0.U
       fu.io.b := 0.U
@@ -533,8 +575,14 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           intake.C.y
         )
 
-        assert(_dest.length <= fu_list.length)
-        (_src1 zip _src2 zip _dest zip fu_list).map {
+        val op_fu_list = if (!p.disjoint_pipes) {
+          fu_list
+        } else {
+          fu_list.drop(0)
+        }
+
+        assert(_dest.length <= op_fu_list.length)
+        (_src1 zip _src2 zip _dest zip op_fu_list).map {
           case (((_1, _2), _3), fu) =>
             fu.io.a := _1
             fu.io.b := _2
@@ -648,8 +696,15 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val _dest = emit.vec_a.take(8)
           val _src1 = intake.vec_a.take(8)
           val _src2 = intake.vec_a.drop(8)
-          assert(_dest.length <= fu_list.length)
-          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+
+          val op_fu_list = if (!p.disjoint_pipes) {
+            fu_list
+          } else {
+            fu_list.drop(200)
+          }
+
+          assert(_dest.length <= op_fu_list.length)
+          (_src1 zip _src2 zip _dest zip op_fu_list).foreach {
             case (((_1, _2), _3), fu) =>
               fu.io.a := _1
               fu.io.b := _2
@@ -676,7 +731,16 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           ).flatten
           assert(_dest.length == _src1.length)
           assert(_dest.length == _src2.length)
-          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+
+          val op_fu_list = if (!p.disjoint_pipes) {
+            fu_list
+          } else {
+            fu_list.drop(300)
+          }
+
+          assert(_dest.length <= op_fu_list.length)
+
+          (_src1 zip _src2 zip _dest zip op_fu_list).foreach {
             case (((_1, _2), _3), fu) =>
               fu.io.a := _1
               fu.io.b := _2
@@ -749,7 +813,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
-    val fu_list = List.fill[AddRecFN](4) {
+    val fu_list = List.fill[AddRecFN](if(!p.disjoint_pipes) 4 else 400) {
       val fu = Module(new AddRecFN(8, 24))
       fu.io.subOp := false.B
       fu.io.a := 0.U
@@ -777,7 +841,14 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           intake.V_subtrahend,
           intake.W_subtrahend
         )
-        (_dest zip _src1 zip _src2 zip fu_list).map {
+
+        val op_fu_list = if (!p.disjoint_pipes) {
+          fu_list
+        } else {
+          fu_list.drop(0)
+        }
+
+        (_dest zip _src1 zip _src2 zip op_fu_list).map {
           case (((_1, _2), _3), fu) =>
             fu.io.subOp := true.B
             fu.io.a := _2
@@ -799,11 +870,18 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val _dest = emit.vec_a.take(4)
           val _src1 = intake.vec_a.take(4)
           val _src2 = intake.vec_a.drop(4)
-          assert(_dest.length <= fu_list.length)
+
+          val op_fu_list = if (!p.disjoint_pipes) {
+            fu_list
+          } else {
+            fu_list.drop(200)
+          }
+
+          assert(_dest.length <= op_fu_list.length)
 
           // the zipped seq will be limited in length by the shorted component,
           // so it's 4 elements long
-          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+          (_src1 zip _src2 zip _dest zip op_fu_list).foreach {
             case (((_1, _2), _3), fu) =>
               fu.io.a := _1
               fu.io.b := _2
@@ -830,7 +908,14 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           ).flatten
           assert(_dest.length == _src1.length)
           assert(_dest.length == _src2.length)
-          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+
+          val op_fu_list = if (!p.disjoint_pipes) {
+            fu_list
+          } else {
+            fu_list.drop(300)
+          }
+
+          (_src1 zip _src2 zip _dest zip op_fu_list).foreach {
             case (((_1, _2), _3), fu) =>
               fu.io.a := _1
               fu.io.b := _2
@@ -894,7 +979,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
-    val fu_list = List.fill[AddRecFN](2) {
+    val fu_list = List.fill[AddRecFN](if(!p.disjoint_pipes) 2 else 400) {
       val fu = Module(new AddRecFN(8, 24))
       fu.io.subOp := false.B
       fu.io.a := 0.U
@@ -931,11 +1016,18 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val _dest = emit.vec_a.take(2)
           val _src1 = intake.vec_a.take(2)
           val _src2 = intake.vec_a.drop(2)
-          assert(_dest.length <= fu_list.length)
+
+          val op_fu_list = if (!p.disjoint_pipes) {
+            fu_list
+          } else {
+            fu_list.drop(200)
+          }
+
+          assert(_dest.length <= op_fu_list.length)
 
           // the zipped seq will be limited in length by the shortest component,
           // so it's 2 elements long
-          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+          (_src1 zip _src2 zip _dest zip op_fu_list).foreach {
             case (((_1, _2), _3), fu) =>
               fu.io.a := _1
               fu.io.b := _2
@@ -964,7 +1056,14 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           ).flatten
           assert(_dest.length == _src1.length)
           assert(_dest.length == _src2.length)
-          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+
+          val op_fu_list = if (!p.disjoint_pipes) {
+            fu_list
+          } else {
+            fu_list.drop(300)
+          }
+
+          (_src1 zip _src2 zip _dest zip op_fu_list).foreach {
             case (((_1, _2), _3), fu) =>
               fu.io.a := _1
               fu.io.b := _2
@@ -986,7 +1085,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     val emit = Wire(new ExtendedPipelineBundle(p))
     emit := intake
 
-    val fu_list = List.fill[AddRecFN](2) {
+    val fu_list = List.fill[AddRecFN](if(!p.disjoint_pipes) 2 else 400) {
       val fu = Module(new AddRecFN(8, 24))
       fu.io.subOp := false.B
       fu.io.a := 0.U
@@ -1023,11 +1122,18 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
           val _dest = emit.vec_a.take(1)
           val _src1 = intake.vec_a.take(1)
           val _src2 = intake.vec_a.drop(1)
-          assert(_dest.length <= fu_list.length)
+
+          val op_fu_list = if (!p.disjoint_pipes) {
+            fu_list
+          } else {
+            fu_list.drop(200)
+          }
+
+          assert(_dest.length <= op_fu_list.length)
 
           // the zipped seq will be limited in length by the shortest component,
-          // so it's 1 elements long
-          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+          // so it's 1 element long
+          (_src1 zip _src2 zip _dest zip op_fu_list).foreach {
             case (((_1, _2), _3), fu) =>
               fu.io.a := _1
               fu.io.b := _2
@@ -1052,8 +1158,13 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
             angular_bundle.angular_query(0),
             angular_bundle.angular_candidate(0)
           )
-          assert(_dest.length <= fu_list.length)
-          (_src1 zip _src2 zip _dest zip fu_list).foreach {
+          val op_fu_list = if (!p.disjoint_pipes) {
+            fu_list
+          } else {
+            fu_list.drop(300)
+          }
+          assert(_dest.length <= op_fu_list.length)
+          (_src1 zip _src2 zip _dest zip op_fu_list).foreach {
             case (((_1, _2), _3), fu) =>
               fu.io.a := _1
               fu.io.b := _2
@@ -1198,14 +1309,14 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
     s.intake :<>= w
     s.emit
   }
-  
+
   // Need to specify some value for this input signal otherwise the FIRRTL
   // compiler will complain of a "not fully initialized" error.
   // However, this assignment will either be overwritten below (if this is
   // exactly the last meaningful stage), or be optimized away (if this is a
   // stage beyond the stage from which we tap the output)
   _last_stage_emit_port.ready := true.B
-  
+
   // now that all stages are chained up, overwrite the first stage
   // stage 1 converts FN to RecFN, so we need a more generic SkidBufferStage
   val stage_1_actual_module = Module(
@@ -1216,6 +1327,7 @@ class UnifiedDatapath(p: RaytracerParams) extends Module {
         val output = WireDefault(0.U.asTypeOf(new ExtendedPipelineBundle(p)))
         output.opcode := input.opcode
         output.ray := RayConvertFNtoRecFN(input.ray)
+        // output.triangle := Mux(input.opcode===UnifiedDatapathOpCode.OpTriangle, TriangleConvertFNtoRecFN(input.triangle), 0.U.asTypeOf(output.triangle))
         output.triangle := TriangleConvertFNtoRecFN(Mux(input.opcode===UnifiedDatapathOpCode.OpTriangle, input.triangle, 0.U.asTypeOf(input.triangle)))
         (output.aabb zip input.aabb).map { case (reg_o, reg_i) =>
           reg_o := AABBConvertFNtoRecFN(Mux(input.opcode===UnifiedDatapathOpCode.OpQuadbox, reg_i, 0.U.asTypeOf(reg_i)))

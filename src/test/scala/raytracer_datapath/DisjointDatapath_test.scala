@@ -34,17 +34,14 @@ import chiseltest.simulator.{
 
 // SW opcode is an enumeration defined in SW_Data.scala
 import SW_Opcode._
-trait WithExposedTime extends Module {
-  def exposed_time: Bits
-}
 
-class UnifiedDatapath_wrapper(euclidean: Option[Int] = None)
-    extends UnifiedDatapath(p = RaytracerParams(false, true, euclidean, false))
+class DisjointDatapath_wrapper(euclidean: Option[Int] = None, disjoint_pipes: Boolean = false)
+    extends DisjointDatapath(p = RaytracerParams(false, true, euclidean, disjoint_pipes))
     with WithExposedTime {
   val exposed_time = expose(_time)
 }
 
-class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
+class DisjointDatapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
   /** Contents:
     * \- Knobs for simulation
@@ -143,6 +140,19 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   if (test_baseline_ray_box_random) {
     testUnifiedIntersection(
       extended = false,
+      disjoint_pipes = true,
+      s"baseline ray box random test ${N_RANDOM_TEST}, disjoint_pipes",
+      ray_seq_for_raybox,
+      box_seq_for_raybox,
+      Seq.fill(ray_seq_for_raybox.length)(
+        SW_Triangle()
+      ),
+      Seq.fill(ray_seq_for_raybox.length)(SW_OpQuadbox)
+    )
+
+    testUnifiedIntersection(
+      extended = false,
+      disjoint_pipes = false,
       s"baseline ray box random test ${N_RANDOM_TEST}",
       ray_seq_for_raybox,
       box_seq_for_raybox,
@@ -172,6 +182,19 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   if (test_baseline_ray_triangle_random) {
     testUnifiedIntersection(
       extended = false,
+      disjoint_pipes = true,
+      s"baseline ray triangle random test ${N_RANDOM_TEST}, disjoint_pipes",
+      ray_seq_for_raytriangle,
+      Seq.fill(ray_seq_for_raytriangle.length)(
+        Seq.fill(4)(SW_Box())
+      ),
+      tri_seq_for_raytriangle,
+      Seq.fill(ray_seq_for_raybox.length)(SW_OpTriangle)
+    )
+
+    testUnifiedIntersection(
+      extended = false,
+      disjoint_pipes = false,
       s"baseline ray triangle random test ${N_RANDOM_TEST}",
       ray_seq_for_raytriangle,
       Seq.fill(ray_seq_for_raytriangle.length)(
@@ -183,9 +206,21 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   }
 
   if (test_extended_ray_box_random) {
+    testUnifiedIntersection(
+      extended = true,
+      disjoint_pipes = true,
+      s"extended ray box random test ${N_RANDOM_TEST}, disjoint_pipes",
+      ray_seq_for_raybox,
+      box_seq_for_raybox,
+      Seq.fill(ray_seq_for_raybox.length)(
+        SW_Triangle()
+      ),
+      Seq.fill(ray_seq_for_raybox.length)(SW_OpQuadbox)
+    )
 
     testUnifiedIntersection(
       extended = true,
+      disjoint_pipes = false,
       s"extended ray box random test ${N_RANDOM_TEST}",
       ray_seq_for_raybox,
       box_seq_for_raybox,
@@ -197,9 +232,23 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   }
 
   if (test_extended_ray_triangle_random) {
+    testUnifiedIntersection(
+      extended = true,
+      disjoint_pipes = true,
+      s"extended ray triangle random test ${N_RANDOM_TEST}, disjoint_pipes",
+      ray_seq_for_raytriangle,
+      Seq.fill(ray_seq_for_raytriangle.length)(
+        Seq.fill(4)(SW_Box())
+      ),
+      tri_seq_for_raytriangle,
+      Seq.fill(
+        ray_seq_for_raytriangle.length
+      )(SW_OpTriangle)
+    )
 
     testUnifiedIntersection(
       extended = true,
+      disjoint_pipes = false,
       s"extended ray triangle random test ${N_RANDOM_TEST}",
       ray_seq_for_raytriangle,
       Seq.fill(ray_seq_for_raytriangle.length)(
@@ -221,8 +270,15 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   val vec_b = vec_pair_seq.map { case (_1, _2) => _2 }
 
   if (test_extended_euclidean_random) {
+    testEuclidean(
+      disjoint_pipes = true,
+      s"extended euclidean test ${N_RANDOM_TEST}, with disjoint pipes",
+      vec_a,
+      vec_b
+    )
 
     testEuclidean(
+      disjoint_pipes = false,
       s"extended euclidean test ${N_RANDOM_TEST}",
       vec_a,
       vec_b
@@ -230,8 +286,15 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   }
 
   if (test_extended_angular_random) {
+    testAngular(
+      disjoint_pipes = true,
+      s"extended angular test ${N_RANDOM_TEST}, with_disjoint pipes",
+      vec_a,
+      vec_b
+    )
 
     testAngular(
+      disjoint_pipes = false,
       s"extended angular test ${N_RANDOM_TEST}",
       vec_a,
       vec_b
@@ -243,6 +306,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   ///////////////////////////
 
   def testEuclidean(
+      disjoint_pipes: Boolean,
       description: String,
       seq_vec_a: Seq[SW_Vector],
       seq_vec_b: Seq[SW_Vector]
@@ -262,9 +326,9 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
     var worst_normalized_diff = 0.0f
 
-    test(gen_baseline_or_extended_datapath(true))
+    test(gen_baseline_or_extended_datapath(true, disjoint_pipes))
       .withAnnotations(
-        chisel_test_annotations("euclidean_" + true.toString() + "_disjoint_" + desc_substring) :++ {
+        chisel_test_annotations("euclidean_" + true.toString() + "_disjoint_" + disjoint_pipes.toString() + "_" + desc_substring) :++ {
           if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }
           else { Nil }
         }
@@ -310,6 +374,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   }
 
   def testAngular(
+      disjoint_pipes: Boolean,
       description: String,
       seq_vec_a: Seq[SW_Vector],
       seq_vec_b: Seq[SW_Vector]
@@ -332,9 +397,9 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
     var worst_normalized_diff = 0.0f
 
-    test(gen_baseline_or_extended_datapath(true))
+    test(gen_baseline_or_extended_datapath(true, disjoint_pipes))
       .withAnnotations(
-        chisel_test_annotations("euclidean_" + true.toString() + "_disjoint_" + desc_substring) :++ {
+        chisel_test_annotations("euclidean_" + true.toString() + "_disjoint_" + disjoint_pipes.toString() + "_" + desc_substring) :++ {
           if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }
           else { Nil }
         }
@@ -387,6 +452,7 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
   def testUnifiedIntersection(
       extended: Boolean,
+      disjoint_pipes: Boolean,
       description: String,
       ray_seq: Seq[SW_Ray],
       box_seq_seq: Seq[Seq[SW_Box]],
@@ -471,9 +537,9 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
 
       var worst_normalized_error = 0.0f
 
-      test(gen_baseline_or_extended_datapath(extended))
+      test(gen_baseline_or_extended_datapath(extended, disjoint_pipes))
         .withAnnotations(
-          chisel_test_annotations("euclidean_" + extended.toString() + "_disjoint_" + desc_substring) :++ {
+          chisel_test_annotations("euclidean_" + extended.toString() + "_disjoint_" + disjoint_pipes.toString() + "_" + desc_substring) :++ {
             if (dump_vcd_for_unified_test) { WriteVcdAnnotation :: Nil }
             else { Nil }
           }
@@ -513,9 +579,11 @@ class Datapath_test extends AnyFreeSpec with ChiselScalatestTester {
   // Helper Routines for testbench    //
   //////////////////////////////////////
 
-  def gen_baseline_or_extended_datapath(extended: Boolean) = (extended) match {
-    case true  => new UnifiedDatapath_wrapper(Some(16))
-    case false => new UnifiedDatapath_wrapper(None)
+  def gen_baseline_or_extended_datapath(extended: Boolean, disjoint_pipes: Boolean) = (extended, disjoint_pipes) match {
+    case (true, true)  => new DisjointDatapath_wrapper(Some(16), true)
+    case (false, true) => new DisjointDatapath_wrapper(None, true)
+    case (true, false)  => new DisjointDatapath_wrapper(Some(16))
+    case (false, false) => new DisjointDatapath_wrapper(None)
   }
 
   def check_raybox_result(
