@@ -43,7 +43,7 @@ Aaron Barnes, Fangjia Shen, Timothy G. Rogers,
 Extending GPU Ray-Tracing Units for Hierarchical Search Acceleration,
 in 2024 57th IEEE/ACM International Symposium on Microarchitecture (MICRO)
 
-F. Shen, A. Barnes, A. Nallathambi and T. G. Rogers,
+Fangjia Shen, Aaron Barnes, Anusuya Nallathambi and Timothy G. Rogers,
 RayFlex: An Open-Source RTL Implementation of the Hardware Ray Tracer Datapath,
 in 2025 IEEE International Symposium on Performance Analysis of Systems and Software (ISPASS)
 ```
